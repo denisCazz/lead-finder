@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Lead {
+  id          Int       @id @default(autoincrement())
+  companyName String    @map("company_name")
+  contactName String?   @map("contact_name")
+  sector      String?
+  website     String?
+  email       String?
+  phone       String?
+  city        String?
+  region      String?
+  address     String?
+  source      String?
+  rating      Float?
+  status      String    @default("new") // new, analyzed, contacted, replied, rejected
+  score       Int       @default(0)
+  campaignId  Int?      @map("campaign_id")
+  campaign    Campaign? @relation(fields: [campaignId], references: [id])
+  analyses    Analysis[]
+  messages    Message[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([website])
+  @@index([sector])
+  @@index([status])
+  @@index([campaignId])
+  @@map("leads")
+}
+
+model Analysis {
+  id                Int      @id @default(autoincrement())
+  leadId            Int      @map("lead_id")
+  lead              Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  performanceScore  Int?     @map("performance_score")
+  lcp               Float?
+  fid               Float?
+  cls               Float?
+  hasEcommerce      Boolean  @default(false) @map("has_ecommerce")
+  hasBooking        Boolean  @default(false) @map("has_booking")
+  isMobileFriendly  Boolean  @default(true) @map("is_mobile_friendly")
+  hasModernDesign   Boolean  @default(true) @map("has_modern_design")
+  hasCrm            Boolean  @default(false) @map("has_crm")
+  issuesJson        String?  @map("issues_json") @db.Text
+  suggestedService  String?  @map("suggested_service")
+  analyzedAt        DateTime @default(now()) @map("analyzed_at")
+
+  @@index([leadId])
+  @@map("analyses")
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  leadId    Int      @map("lead_id")
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      String   @default("email") // email, whatsapp, linkedin
+  subject   String?
+  content   String   @db.Text
+  status    String   @default("draft") // draft, approved, sent, failed
+  sentAt    DateTime? @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([leadId])
+  @@index([status])
+  @@map("messages")
+}
+
+model Campaign {
+  id        Int      @id @default(autoincrement())
+  name      String
+  sector    String
+  region    String?
+  city      String?
+  status    String   @default("active") // active, paused, completed
+  leads     Lead[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("campaigns")
+}
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String @db.Text
+
+  @@map("settings")
+}
