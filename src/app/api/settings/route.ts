@@ -7,13 +7,16 @@ export async function GET() {
   for (const s of settings) {
     map[s.key] = s.value;
   }
-  return NextResponse.json(map);
+  return NextResponse.json({ settings: map });
 }
 
 export async function PUT(request: NextRequest) {
-  const body = await request.json() as Record<string, string>;
+  const body = await request.json();
+  // Support both { settings: {...} } wrapper and flat { key: value } format
+  const entries: Record<string, string> = body.settings ?? body;
 
-  for (const [key, value] of Object.entries(body)) {
+  for (const [key, value] of Object.entries(entries)) {
+    if (typeof value !== "string") continue;
     await prisma.setting.upsert({
       where: { key },
       update: { value },

@@ -14,6 +14,11 @@ import {
   Send,
   Copy,
   Check,
+  Brain,
+  Target,
+  TrendingUp,
+  AlertTriangle,
+  Lightbulb,
 } from "lucide-react";
 
 interface LeadDetail {
@@ -42,6 +47,9 @@ interface LeadDetail {
     hasCrm: boolean;
     issuesJson: string | null;
     suggestedService: string | null;
+    aiDiagnosis: string | null;
+    aiScore: number | null;
+    aiTokensUsed: number | null;
     analyzedAt: string;
   }>;
   messages: Array<{
@@ -274,9 +282,117 @@ export default function LeadDetailPage() {
             <div>
               <span className="text-[var(--muted-foreground)]">Messaggi:</span> {lead.messages.length}
             </div>
+            {latestAnalysis?.aiScore !== null && latestAnalysis?.aiScore !== undefined && (
+              <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                <span className="text-[var(--muted-foreground)]">AI Score</span>
+                <span className={`text-lg font-bold ${
+                  latestAnalysis.aiScore >= 70 ? "text-red-400" : latestAnalysis.aiScore >= 40 ? "text-yellow-400" : "text-green-400"
+                }`}>
+                  {latestAnalysis.aiScore}/100
+                </span>
+              </div>
+            )}
+            {latestAnalysis?.aiTokensUsed !== null && latestAnalysis?.aiTokensUsed !== undefined && (
+              <div className="text-xs text-[var(--muted-foreground)]">
+                AI tokens: {latestAnalysis.aiTokensUsed}
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* AI Diagnosis */}
+      {latestAnalysis?.aiDiagnosis && (() => {
+        try {
+          const diag = JSON.parse(latestAnalysis.aiDiagnosis);
+          return (
+            <div className="mt-6 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-xl border border-purple-500/30 p-6">
+              <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+                <Brain className="w-5 h-5 text-purple-400" />
+                Diagnosi AI
+                {diag.confidence && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full ml-2 ${
+                    diag.confidence === "alta" ? "bg-green-500/20 text-green-400" :
+                    diag.confidence === "media" ? "bg-yellow-500/20 text-yellow-400" :
+                    "bg-gray-500/20 text-gray-400"
+                  }`}>
+                    Confidenza: {diag.confidence}
+                  </span>
+                )}
+              </h2>
+
+              {/* What they do */}
+              {diag.whatTheyDo && (
+                <p className="text-sm mb-4">{diag.whatTheyDo}</p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                {/* Strengths */}
+                {diag.strengths?.length > 0 && (
+                  <div>
+                    <h3 className="flex items-center gap-1.5 font-medium text-green-400 mb-2">
+                      <TrendingUp className="w-4 h-4" /> Punti di Forza
+                    </h3>
+                    <ul className="space-y-1">
+                      {diag.strengths.map((s: string, i: number) => (
+                        <li key={i} className="text-[var(--muted-foreground)] text-xs">✓ {s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Weaknesses */}
+                {diag.weaknesses?.length > 0 && (
+                  <div>
+                    <h3 className="flex items-center gap-1.5 font-medium text-red-400 mb-2">
+                      <AlertTriangle className="w-4 h-4" /> Criticità
+                    </h3>
+                    <ul className="space-y-1">
+                      {diag.weaknesses.map((w: string, i: number) => (
+                        <li key={i} className="text-[var(--muted-foreground)] text-xs">✗ {w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Opportunities */}
+                {diag.opportunities?.length > 0 && (
+                  <div>
+                    <h3 className="flex items-center gap-1.5 font-medium text-yellow-400 mb-2">
+                      <Lightbulb className="w-4 h-4" /> Opportunità
+                    </h3>
+                    <ul className="space-y-1">
+                      {diag.opportunities.map((o: string, i: number) => (
+                        <li key={i} className="text-[var(--muted-foreground)] text-xs">→ {o}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Suggested Approach */}
+                {diag.suggestedApproach && (
+                  <div>
+                    <h3 className="flex items-center gap-1.5 font-medium text-purple-400 mb-2">
+                      <Target className="w-4 h-4" /> Approccio Consigliato
+                    </h3>
+                    <p className="text-[var(--muted-foreground)] text-xs">{diag.suggestedApproach}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Personalized Hook */}
+              {diag.personalizedHook && (
+                <div className="mt-4 pt-4 border-t border-purple-500/20">
+                  <p className="text-xs text-[var(--muted-foreground)]">Gancio personalizzato per email:</p>
+                  <p className="text-sm italic text-purple-300 mt-1">&ldquo;{diag.personalizedHook}&rdquo;</p>
+                </div>
+              )}
+            </div>
+          );
+        } catch {
+          return null;
+        }
+      })()}
 
       {/* Messages */}
       <div className="mt-8">

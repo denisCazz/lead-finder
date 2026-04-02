@@ -37,21 +37,45 @@ export async function POST(
     service = "Sito Web ad alte performance";
   }
 
-  const { subject, body } = await generateColdEmail({
+  // Parse AI diagnosis if available
+  let aiDiag = null;
+  if (analysis?.aiDiagnosis) {
+    try { aiDiag = JSON.parse(analysis.aiDiagnosis); } catch { /* ignore */ }
+  }
+
+  const emailResult = await generateColdEmail({
     companyName: lead.companyName,
     contactName: lead.contactName,
     sector: lead.sector,
     problem,
     suggestedService: service,
+    aiDiagnosis: aiDiag,
   });
 
   const message = await prisma.message.create({
     data: {
       leadId: lead.id,
       type: "email",
-      subject,
-      content: body,
+      subject: emailResult.data.subject,
+      content: emailResult.data.body,
       status: "draft",
+    },
+  });
+
+  // Log AI generation
+  await prisma.activityLog.create({
+    data: {
+      leadId: lead.id,
+      campaignId: lead.campaignId,
+      type: "ai_generate",
+      message: `✉️ Email AI generata per ${lead.companyName} — "${emailResult.data.subject}" (${emailResult.tokensUsed} tokens, ${emailResult.durationMs}ms)`,
+      metadata: JSON.stringify({
+        messageId: message.id,
+        tokensUsed: emailResult.tokensUsed,
+        model: emailResult.model,
+        durationMs: emailResult.durationMs,
+        hadAiContext: !!aiDiag,
+      }),
     },
   });
 
@@ -62,7 +86,7 @@ export async function POST(
     companyName: lead.companyName,
     email: lead.email,
     phone: lead.phone,
-    preview: body,
+    preview: emailResult.data.body,
   });
 
   return NextResponse.json({ success: true, message });

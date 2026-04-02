@@ -26,6 +26,7 @@ model Lead {
   campaign    Campaign? @relation(fields: [campaignId], references: [id])
   analyses    Analysis[]
   messages    Message[]
+  logs        ActivityLog[]
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
@@ -51,6 +52,9 @@ model Analysis {
   hasCrm            Boolean  @default(false) @map("has_crm")
   issuesJson        String?  @map("issues_json") @db.Text
   suggestedService  String?  @map("suggested_service")
+  aiDiagnosis       String?  @map("ai_diagnosis") @db.Text
+  aiScore           Int?     @map("ai_score")
+  aiTokensUsed      Int?     @map("ai_tokens_used")
   analyzedAt        DateTime @default(now()) @map("analyzed_at")
 
   @@index([leadId])
@@ -81,10 +85,29 @@ model Campaign {
   city      String?
   status    String   @default("active") // active, paused, completed
   leads     Lead[]
+  logs      ActivityLog[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("campaigns")
+}
+
+model ActivityLog {
+  id         Int       @id @default(autoincrement())
+  campaignId Int?      @map("campaign_id")
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  leadId     Int?      @map("lead_id")
+  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type       String    // scrape_start, scrape_progress, scrape_done, scrape_error, ai_analysis, ai_generate, ai_qualify, analyze, generate, send
+  message    String    @db.Text
+  progress   Int?      // 0-100 percentage
+  metadata   String?   @db.Text // JSON extra data (tokens, model, duration, etc.)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([campaignId])
+  @@index([leadId])
+  @@index([createdAt])
+  @@map("activity_logs")
 }
 
 model Setting {

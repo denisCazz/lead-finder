@@ -4,6 +4,18 @@ import { scrapeGoogleMaps } from "@/lib/scrapers/google-maps";
 import { scrapePagineGialle } from "@/lib/scrapers/pagine-gialle";
 import { extractDomain } from "@/lib/utils";
 
+async function log(campaignId: number, type: string, message: string, progress?: number, metadata?: Record<string, unknown>) {
+  await prisma.activityLog.create({
+    data: {
+      campaignId,
+      type,
+      message,
+      progress: progress ?? null,
+      metadata: metadata ? JSON.stringify(metadata) : null,
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { campaignId } = body;
@@ -18,6 +30,10 @@ export async function POST(request: NextRequest) {
   }
 
   const query = `${campaign.sector} ${campaign.city || campaign.region || "Italia"}`;
+
+  // 0% - Start
+  await log(campaignId, "scrape_start", `Scraping avviato per "${query}"`, 0);
+
   let allLeads: Array<{
     companyName: string;
     contactName?: string;
@@ -29,16 +45,30 @@ export async function POST(request: NextRequest) {
     source: string;
   }> = [];
 
-  // Run scrapers in parallel
+  // 10% - Google Maps
+  await log(campaignId, "scrape_progress", "Ricerca su Google Maps...", 10);
   const [googleResults, pgResults] = await Promise.allSettled([
     scrapeGoogleMaps(query, 20),
     scrapePagineGialle(campaign.sector, campaign.city || campaign.region || "Italia", 3),
   ]);
 
-  if (googleResults.status === "fulfilled") allLeads.push(...googleResults.value);
-  if (pgResults.status === "fulfilled") allLeads.push(...pgResults.value);
+  if (googleResults.status === "fulfilled") {
+    allLeads.push(...googleResults.value);
+    await log(campaignId, "scrape_progress", `Google Maps: ${googleResults.value.length} risultati trovati`, 40, { source: "google_maps", count: googleResults.value.length });
+  } else {
+    await log(campaignId, "scrape_error", `Errore Google Maps: ${googleResults.reason?.message || "sconosciuto"}`, 40, { source: "google_maps", error: String(googleResults.reason) });
+  }
 
-  // Deduplicate by domain
+  // 50% - Pagine Gialle
+  if (pgResults.status === "fulfilled") {
+    allLeads.push(...pgResults.value);
+    await log(campaignId, "scrape_progress", `Pagine Gialle: ${pgResults.value.length} risultati trovati`, 50, { source: "pagine_gialle", count: pgResults.value.length });
+  } else {
+    await log(campaignId, "scrape_error", `Errore Pagine Gialle: ${pgResults.reason?.message || "sconosciuto"}`, 50, { source: "pagine_gialle", error: String(pgResults.reason) });
+  }
+
+  // 60% - Dedup
+  await log(campaignId, "scrape_progress", `Deduplicazione di ${allLeads.length} lead...`, 60);
   const seen = new Set<string>();
   const uniqueLeads = allLeads.filter((lead) => {
     const domain = lead.website ? extractDomain(lead.website) : null;
@@ -47,10 +77,13 @@ export async function POST(request: NextRequest) {
     seen.add(key);
     return true;
   });
+  await log(campaignId, "scrape_progress", `${uniqueLeads.length} lead unici dopo dedup (rimossi ${allLeads.length - uniqueLeads.length} duplicati)`, 70);
 
-  // Save to database
+  // 70-95% - Save to DB
   let imported = 0;
-  for (const lead of uniqueLeads) {
+  let errors = 0;
+  for (let i = 0; i < uniqueLeads.length; i++) {
+    const lead = uniqueLeads[i];
     try {
       await prisma.lead.upsert({
         where: { website: lead.website || `__none_${Date.now()}_${Math.random()}` },
@@ -71,15 +104,30 @@ export async function POST(request: NextRequest) {
       });
       imported++;
     } catch (err) {
-      // Duplicate, skip
+      errors++;
       console.error("Error saving lead:", err);
     }
+
+    // Log progress every 5 leads or at the end
+    if ((i + 1) % 5 === 0 || i === uniqueLeads.length - 1) {
+      const pct = 70 + Math.round(((i + 1) / uniqueLeads.length) * 25);
+      await log(campaignId, "scrape_progress", `Salvati ${imported}/${uniqueLeads.length} lead...`, pct);
+    }
   }
+
+  // 100% - Done
+  await log(campaignId, "scrape_done", `Scraping completato: ${imported} lead importati, ${errors} errori, ${allLeads.length - uniqueLeads.length} duplicati rimossi`, 100, {
+    found: allLeads.length,
+    unique: uniqueLeads.length,
+    imported,
+    errors,
+  });
 
   return NextResponse.json({
     success: true,
     found: allLeads.length,
     unique: uniqueLeads.length,
     imported,
+    errors,
   });
 }

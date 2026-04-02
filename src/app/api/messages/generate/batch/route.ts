@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateColdEmail, mapIssuesToProblemString } from "@/lib/openai";
+import { generateColdEmail, mapIssuesToProblemString, loadPrompts, clearPromptCache, SiteDiagnosis } from "@/lib/openai";
 import { notifyMessageReady } from "@/lib/telegram";
 
 export async function POST() {
+  await loadPrompts();
+
   const leads = await prisma.lead.findMany({
     where: {
       status: "analyzed",
@@ -37,21 +39,44 @@ export async function POST() {
         service = "Sito Web ad alte performance";
       }
 
-      const { subject, body } = await generateColdEmail({
+      // Parse AI diagnosis if available
+      let aiDiag: SiteDiagnosis | null = null;
+      if (analysis?.aiDiagnosis) {
+        try { aiDiag = JSON.parse(analysis.aiDiagnosis); } catch { /* ignore */ }
+      }
+
+      const emailResult = await generateColdEmail({
         companyName: lead.companyName,
         contactName: lead.contactName,
         sector: lead.sector,
         problem,
         suggestedService: service,
+        aiDiagnosis: aiDiag,
       });
 
       const message = await prisma.message.create({
         data: {
           leadId: lead.id,
-          type: "email",
-          subject,
-          content: body,
+          type: lead.email ? "email" : "whatsapp",
+          subject: emailResult.data.subject,
+          content: emailResult.data.body,
           status: "draft",
+        },
+      });
+
+      // Log AI email generation
+      await prisma.activityLog.create({
+        data: {
+          leadId: lead.id,
+          campaignId: lead.campaignId,
+          type: "ai_generate",
+          message: `✉️ Email generata per ${lead.companyName} (${emailResult.tokensUsed} tokens)`,
+          metadata: JSON.stringify({
+            messageId: message.id,
+            tokensUsed: emailResult.tokensUsed,
+            model: emailResult.model,
+            durationMs: emailResult.durationMs,
+          }),
         },
       });
 
@@ -61,7 +86,7 @@ export async function POST() {
         companyName: lead.companyName,
         email: lead.email,
         phone: lead.phone,
-        preview: body,
+        preview: emailResult.data.body,
       });
 
       results.push({ leadId: lead.id, messageId: message.id });
@@ -70,5 +95,6 @@ export async function POST() {
     }
   }
 
+  clearPromptCache();
   return NextResponse.json({ success: true, generated: results.length, results });
 }

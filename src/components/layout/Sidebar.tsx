@@ -9,10 +9,12 @@ import {
   Megaphone,
   Settings,
   Zap,
+  Bot,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/ai-campaign", label: "AI Campaign", icon: Bot },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/messages", label: "Messaggi", icon: MessageSquare },
   { href: "/campaigns", label: "Campagne", icon: Megaphone },

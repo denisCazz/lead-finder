@@ -7,6 +7,9 @@ export interface HtmlAnalysisResult {
   hasModernDesign: boolean;
   hasCrm: boolean;
   detectedTechs: string[];
+  pageTitle: string;
+  metaDescription: string;
+  extractedText: string; // Cleaned page text for AI analysis
 }
 
 const ECOMMERCE_INDICATORS = [
@@ -53,6 +56,16 @@ export async function analyzeHtml(url: string): Promise<HtmlAnalysisResult | nul
     const htmlLower = html.toLowerCase();
     const detectedTechs: string[] = [];
 
+    // Extract page metadata
+    const pageTitle = $("title").first().text().trim() || "";
+    const metaDescription = $('meta[name="description"]').attr("content")?.trim() || "";
+
+    // Extract clean text content for AI (remove scripts, styles, nav noise)
+    $("script, style, noscript, iframe, svg").remove();
+    const rawText = $("body").text().replace(/\s+/g, " ").trim();
+    // Limit to ~3000 chars to keep GPT tokens reasonable
+    const extractedText = rawText.slice(0, 3000);
+
     // Check mobile-friendly (viewport meta tag)
     const viewport = $('meta[name="viewport"]').attr("content") || "";
     const isMobileFriendly = viewport.includes("width=device-width");
@@ -90,6 +103,9 @@ export async function analyzeHtml(url: string): Promise<HtmlAnalysisResult | nul
       hasModernDesign,
       hasCrm,
       detectedTechs,
+      pageTitle,
+      metaDescription,
+      extractedText,
     };
   } catch (err) {
     console.error("HTML analysis error:", err);
