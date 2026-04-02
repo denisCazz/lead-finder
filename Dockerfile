@@ -1,12 +1,14 @@
 # ── Stage 1: Install dependencies ────────────────────────────────────────
-FROM node:22-alpine AS deps
+FROM node:22-slim AS deps
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci
 
 # ── Stage 2: Build ───────────────────────────────────────────────────────
-FROM node:22-alpine AS build
+FROM node:22-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -60,12 +62,14 @@ COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 
-# Copy Prisma schema (needed by Prisma client at runtime)
+# Copy Prisma schema + generated client (engine binaries aren't traced by standalone)
 COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=build /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=15s \
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=30s \
   CMD curl -f http://127.0.0.1:3000 || exit 1
 
 CMD ["node", "server.js"]
