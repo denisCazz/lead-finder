@@ -53,6 +53,10 @@ export async function POST(
         isMobileFriendly: htmlResult.isMobileFriendly,
         hasModernDesign: htmlResult.hasModernDesign,
         hasCrm: htmlResult.hasCrm,
+        hasAnalytics: htmlResult.hasAnalytics,
+        hasSocialPresence: htmlResult.hasSocialPresence,
+        hasWhatsappWidget: htmlResult.hasWhatsappWidget,
+        hasContactForm: htmlResult.hasContactForm,
         detectedTechs: htmlResult.detectedTechs,
       });
 

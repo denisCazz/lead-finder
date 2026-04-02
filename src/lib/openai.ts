@@ -105,16 +105,20 @@ export async function diagnoseSiteWithAI(input: {
   isMobileFriendly: boolean;
   hasModernDesign: boolean;
   hasCrm: boolean;
+  hasAnalytics?: boolean;
+  hasSocialPresence?: boolean;
+  hasWhatsappWidget?: boolean;
+  hasContactForm?: boolean;
   detectedTechs: string[];
 }): Promise<AiResult<SiteDiagnosis>> {
-  const userPrompt = `Analizza questo sito web:
+  const userPrompt = `Analizza questo sito web per conto di Denis (Bitora.it — agenzia digitale per PMI):
 
 Nome Azienda: ${input.companyName}
 Settore: ${input.sector || "Non specificato"}
 Sito: ${input.website}
 Titolo pagina: ${input.pageTitle || "N/A"}
 Meta description: ${input.metaDescription || "N/A"}
-Performance PageSpeed: ${input.performanceScore !== null ? `${input.performanceScore}/100` : "Non disponibile"}
+Performance PageSpeed (mobile): ${input.performanceScore !== null ? `${input.performanceScore}/100` : "Non rilevato (probabilmente lento o non raggiungibile)"}
 
 Risultati scan tecnico:
 - E-commerce: ${input.hasEcommerce ? "Sì" : "No"}
@@ -122,9 +126,13 @@ Risultati scan tecnico:
 - Mobile-friendly: ${input.isMobileFriendly ? "Sì" : "No"}
 - Design moderno: ${input.hasModernDesign ? "Sì" : "No"}
 - CRM/Area Clienti: ${input.hasCrm ? "Sì" : "No"}
+- Analytics (GA/FB Pixel): ${input.hasAnalytics ? "Sì" : "No"}
+- Presenza social collegata: ${input.hasSocialPresence ? "Sì" : "No"}
+- Widget WhatsApp: ${input.hasWhatsappWidget ? "Sì" : "No"}
+- Form di contatto: ${input.hasContactForm ? "Sì" : "No"}
 - Tecnologie rilevate: ${input.detectedTechs.length > 0 ? input.detectedTechs.join(", ") : "Nessuna rilevata"}
 
-Contenuto testuale del sito (primi ~3000 caratteri):
+Contenuto testuale del sito (primi ~4000 caratteri):
 ${input.extractedText || "Contenuto non disponibile"}`;
 
   const systemPrompt = await getSystemPrompt("prompt_diagnosis");
@@ -271,4 +279,64 @@ export function mapIssuesToProblemString(issues: {
     problem: "Il sito ha margini di miglioramento significativi",
     service: "Sito Web ad alte performance",
   };
+}
+
+// ─── 5. WhatsApp Message Generation ───────────────────────────────────
+export async function generateWhatsAppMessage(input: {
+  companyName: string;
+  sector: string | null;
+  problem: string;
+  suggestedService: string;
+  personalizedHook?: string | null;
+}): Promise<AiResult<string>> {
+  const whatsappPrompt = await getSystemPrompt("prompt_whatsapp");
+  const userPrompt = `Genera il messaggio WhatsApp per:
+Nome Azienda: ${input.companyName}
+Settore: ${input.sector || "Non specificato"}
+Problema rilevato: ${input.problem}
+Soluzione da proporre: ${input.suggestedService}${input.personalizedHook ? `\nDettaglio specifico da usare: ${input.personalizedHook}` : ""}`;
+
+  return callGpt<string>(
+    whatsappPrompt,
+    userPrompt,
+    (text) => text.trim(),
+    { temperature: 0.85, maxTokens: 200 }
+  );
+}
+
+// ─── 6. AI City Suggestions ────────────────────────────────────────────
+export interface CitySuggestion {
+  city: string;
+  region: string;
+  reasoning: string;
+  estimatedLeads: number;
+  priority: "alta" | "media" | "bassa";
+}
+
+export async function suggestNewCities(input: {
+  sector: string;
+  alreadyWorkedCities: { city: string; region?: string | null; leadsFound: number }[];
+}): Promise<AiResult<CitySuggestion[]>> {
+  const cityPrompt = await getSystemPrompt("prompt_city_suggestion");
+  const cityList = input.alreadyWorkedCities
+    .map((c) => `- ${c.city}${c.region ? ` (${c.region})` : ""}: ${c.leadsFound} lead trovati`)
+    .join("\n");
+
+  const userPrompt = `Settore target: ${input.sector}
+
+Città già lavorate (da NON riproporre):
+${cityList || "Nessuna ancora"}
+
+Suggerisci 5 nuove città italiane con alto potenziale per questo settore.`;
+
+  return callGpt<CitySuggestion[]>(
+    cityPrompt,
+    userPrompt,
+    (text) => {
+      const cleaned = text.replace(/```json\n?|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      return parsed.suggestions ?? parsed;
+    },
+    { temperature: 0.6, maxTokens: 600 }
+  );
 }

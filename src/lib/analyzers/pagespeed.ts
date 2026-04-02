@@ -18,9 +18,14 @@ export async function analyzePageSpeed(url: string): Promise<PageSpeedResult | n
   if (apiKey) params.set("key", apiKey);
 
   try {
-    const res = await fetch(`${endpoint}?${params}`, { signal: AbortSignal.timeout(30000) });
+    let res = await fetch(`${endpoint}?${params}`, { signal: AbortSignal.timeout(30000) });
+    if (res.status === 429) {
+      // Rate limited — wait 12s and try once more
+      await new Promise((r) => setTimeout(r, 12000));
+      res = await fetch(`${endpoint}?${params}`, { signal: AbortSignal.timeout(30000) });
+    }
     if (!res.ok) {
-      console.error(`PageSpeed API error: ${res.status}`);
+      console.warn(`PageSpeed API error: ${res.status} — skipping`);
       return null;
     }
 

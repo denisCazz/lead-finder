@@ -63,15 +63,16 @@ model Analysis {
 }
 
 model Message {
-  id        Int      @id @default(autoincrement())
-  leadId    Int      @map("lead_id")
-  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  type      String   @default("email") // email, whatsapp, linkedin
-  subject   String?
-  content   String   @db.Text
-  status    String   @default("draft") // draft, approved, sent, failed
-  sentAt    DateTime? @map("sent_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  id               Int      @id @default(autoincrement())
+  leadId           Int      @map("lead_id")
+  lead             Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type             String   @default("email") // email, whatsapp, linkedin
+  subject          String?
+  content          String   @db.Text
+  whatsappContent  String?  @map("whatsapp_content") @db.Text
+  status           String   @default("draft") // draft, approved, sent, failed
+  sentAt           DateTime? @map("sent_at")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   @@index([leadId])
   @@index([status])
@@ -117,4 +118,18 @@ model Setting {
   value String @db.Text
 
   @@map("settings")
+}
+
+model CityLog {
+  id          Int      @id @default(autoincrement())
+  city        String
+  region      String?
+  sector      String
+  campaignId  Int?     @map("campaign_id")
+  leadsFound  Int      @default(0) @map("leads_found")
+  scrapedAt   DateTime @default(now()) @map("scraped_at")
+
+  @@index([city, sector])
+  @@index([scrapedAt])
+  @@map("city_logs")
 }

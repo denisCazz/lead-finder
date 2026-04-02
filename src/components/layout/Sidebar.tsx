@@ -13,14 +13,22 @@ import {
   Bot,
   Menu,
   X,
+  MessageCircle,
+  BarChart3,
+  Terminal,
+  Flame,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/ai-campaign", label: "AI Campaign", icon: Bot },
   { href: "/leads", label: "Leads", icon: Users },
+  { href: "/hot-leads", label: "Hot Leads", icon: Flame },
   { href: "/messages", label: "Messaggi", icon: MessageSquare },
+  { href: "/outreach", label: "Outreach", icon: MessageCircle },
   { href: "/campaigns", label: "Campagne", icon: Megaphone },
+  { href: "/jobs", label: "Esegui Job", icon: Terminal },
+  { href: "/usage", label: "Utilizzo AI", icon: BarChart3 },
   { href: "/settings", label: "Impostazioni", icon: Settings },
 ];
 

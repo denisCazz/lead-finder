@@ -290,13 +290,81 @@ export default function SettingsPage() {
                 </button>
               </div>
 
-              {/* Webhook URL */}
+              {/* Auto-send toggle */}
+              <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6 mb-6">
+                <h2 className="text-lg font-semibold mb-4">Invio Automatico Email (Cron Mattutino)</h2>
+                <p className="text-sm text-[var(--muted-foreground)] mb-4">
+                  Il cron mattutino (09:00) invia automaticamente le email ai lead con score sopra la soglia.
+                  Le email vengono inviate solo se c&apos;è un indirizzo email disponibile e il messaggio è in stato bozza.
+                </p>
+
+                <div className="space-y-4">
+                  {/* auto_send_enabled */}
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm font-medium">Invio automatico abilitato</label>
+                    <button
+                      onClick={() => setSettings({ ...settings, auto_send_enabled: settings.auto_send_enabled === "true" ? "false" : "true" })}
+                      className={`relative w-12 h-6 rounded-full transition-colors ${
+                        settings.auto_send_enabled === "true" ? "bg-green-600" : "bg-gray-600"
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                        settings.auto_send_enabled === "true" ? "translate-x-6" : "translate-x-0.5"
+                      }`} />
+                    </button>
+                  </div>
+
+                  {/* auto_send_min_score */}
+                  <div>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">
+                      Score minimo per invio automatico
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={settings.auto_send_min_score || "70"}
+                      onChange={(e) => setSettings({ ...settings, auto_send_min_score: e.target.value })}
+                      className="w-32 px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm"
+                    />
+                    <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                      Lead con score &lt; questa soglia vanno in Outreach manuale
+                    </p>
+                  </div>
+
+                  {/* morning webhook */}
+                  <div>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">Webhook Cron Mattutino (09:00)</label>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        readOnly
+                        value={`${settings.app_url || (typeof window !== "undefined" ? window.location.origin : "")}/api/cron/morning`}
+                        className="flex-1 px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* night webhook */}
+                  <div>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">Webhook Cron Notturno (02:00)</label>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        readOnly
+                        value={`${settings.app_url || (typeof window !== "undefined" ? window.location.origin : "")}/api/cron/daily`}
+                        className="flex-1 px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Webhook URL (hourly, legacy) */}
               <div className="mb-4">
-                <label className="block text-sm text-[var(--muted-foreground)] mb-1">URL Webhook</label>
+                <label className="block text-sm text-[var(--muted-foreground)] mb-1">URL Webhook (ogni ora)</label>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     readOnly
-                    value={`${settings.app_url || window.location.origin}/api/cron/hourly`}
+                    value={`${settings.app_url || (typeof window !== "undefined" ? window.location.origin : "")}/api/cron/hourly`}
                     className="flex-1 px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm font-mono"
                   />
                   <button

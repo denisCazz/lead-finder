@@ -39,6 +39,10 @@ export async function sendTelegramMessage(text: string, inlineKeyboard?: InlineK
 
 type InlineKeyboard = Array<Array<{ text: string; url?: string; callback_data?: string }>>;
 
+function isRealUrl(url: string): boolean {
+  return url.startsWith("https://") && !url.includes("localhost") && !url.includes("127.0.0.1");
+}
+
 export async function notifyNewLead(lead: {
   id: number;
   companyName: string;
@@ -57,11 +61,10 @@ export async function notifyNewLead(lead: {
 ⭐ Score: ${lead.score}/100
 ${lead.issues ? `\n⚠️ Problemi: ${escapeHtml(lead.issues)}` : ""}`;
 
-  const keyboard: InlineKeyboard = [
-    [
-      { text: "📝 Vedi in Dashboard", url: `${appUrl}/leads/${lead.id}` },
-    ],
-  ];
+  const leadUrl = `${appUrl}/leads/${lead.id}`;
+  const keyboard: InlineKeyboard | undefined = isRealUrl(leadUrl)
+    ? [[{ text: "📝 Vedi in Dashboard", url: leadUrl }]]
+    : undefined;
 
   return sendTelegramMessage(text, keyboard);
 }
@@ -88,13 +91,12 @@ export async function notifyMessageReady(data: {
 
   text += `\n\n📄 <i>${escapeHtml(data.preview.substring(0, 200))}...</i>`;
 
-  const keyboard: InlineKeyboard = [
-    [
-      { text: "📝 Vedi in Dashboard", url: `${appUrl}/leads/${data.leadId}` },
-    ],
-  ];
+  const leadUrl = `${appUrl}/leads/${data.leadId}`;
+  const keyboard: InlineKeyboard | undefined = isRealUrl(leadUrl)
+    ? [[{ text: "📝 Vedi in Dashboard", url: leadUrl }]]
+    : undefined;
 
-  if (!data.email && data.phone) {
+  if (!data.email && data.phone && keyboard) {
     keyboard[0].push({
       text: "📱 Apri WhatsApp",
       url: `https://wa.me/39${data.phone.replace(/\D/g, "")}`,

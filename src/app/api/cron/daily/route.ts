@@ -5,10 +5,26 @@ import { scrapePagineGialle } from "@/lib/scrapers/pagine-gialle";
 import { analyzePageSpeed } from "@/lib/analyzers/pagespeed";
 import { analyzeHtml } from "@/lib/analyzers/html-analyzer";
 import { calculateScore } from "@/lib/analyzers/scorer";
-import { diagnoseSiteWithAI, qualifyLeadWithAI, generateColdEmail, mapIssuesToProblemString, loadPrompts, clearPromptCache, SiteDiagnosis } from "@/lib/openai";
-import { notifyNewLead, notifyMessageReady, notifyDailySummary } from "@/lib/telegram";
+import {
+  diagnoseSiteWithAI,
+  qualifyLeadWithAI,
+  generateColdEmail,
+  generateWhatsAppMessage,
+  mapIssuesToProblemString,
+  loadPrompts,
+  clearPromptCache,
+  SiteDiagnosis,
+} from "@/lib/openai";
+import { notifyNewLead, notifyDailySummary } from "@/lib/telegram";
 import { extractDomain } from "@/lib/utils";
 
+/**
+ * NIGHT CRON — runs at ~02:00
+ * 1. Scrape leads for all active campaigns → write CityLog
+ * 2. Analyze only leads that have NO existing Analysis (avoid re-analysis)
+ * 3. Generate email draft + WhatsApp text for each analyzed lead
+ * NO emails are sent here — sending is delegated to the morning cron.
+ */
 export async function POST(request: NextRequest) {
   // Auth check
   const secret = request.headers.get("x-cron-secret");
@@ -34,15 +50,16 @@ export async function POST(request: NextRequest) {
 
   for (const campaign of campaigns) {
     try {
-      const query = `${campaign.sector} ${campaign.city || campaign.region || "Italia"}`;
+      const cityLabel = campaign.city || campaign.region || "Italia";
+      const query = `${campaign.sector} ${cityLabel}`;
 
       await prisma.activityLog.create({
-        data: { campaignId: campaign.id, type: "scrape_start", message: `🔍 Scraping giornaliero: "${query}"` },
+        data: { campaignId: campaign.id, type: "scrape_start", message: `🌙 Cron notturno: scraping "${query}"` },
       });
 
       const [gmLeads, pgLeads] = await Promise.allSettled([
         scrapeGoogleMaps(query, 10),
-        scrapePagineGialle(campaign.sector, campaign.city || campaign.region || "", 10),
+        scrapePagineGialle(campaign.sector, cityLabel, 10),
       ]);
 
       const allLeads = [
@@ -50,8 +67,14 @@ export async function POST(request: NextRequest) {
         ...(pgLeads.status === "fulfilled" ? pgLeads.value : []),
       ];
 
+      let newForCampaign = 0;
+      const seen = new Set<string>();
       for (const lead of allLeads) {
         const domain = lead.website ? extractDomain(lead.website) : null;
+        const dedup = domain || lead.companyName.toLowerCase();
+        if (seen.has(dedup)) continue;
+        seen.add(dedup);
+
         if (domain) {
           const exists = await prisma.lead.findFirst({ where: { website: domain } });
           if (exists) continue;
@@ -63,7 +86,8 @@ export async function POST(request: NextRequest) {
             website: domain,
             phone: lead.phone || null,
             address: lead.address || null,
-            city: lead.city || null,
+            city: lead.city || campaign.city || null,
+            region: campaign.region || null,
             sector: campaign.sector,
             source: lead.source || "google_maps",
             status: "new",
@@ -71,6 +95,7 @@ export async function POST(request: NextRequest) {
           },
         });
         results.scraped++;
+        newForCampaign++;
         try {
           await notifyNewLead({
             id: created.id,
@@ -83,8 +108,21 @@ export async function POST(request: NextRequest) {
         } catch { /* telegram optional */ }
       }
 
+      // Write CityLog for tracking
+      if (campaign.city || campaign.region) {
+        await prisma.cityLog.create({
+          data: {
+            city: campaign.city || campaign.region || "Italia",
+            region: campaign.region,
+            sector: campaign.sector,
+            campaignId: campaign.id,
+            leadsFound: newForCampaign,
+          },
+        });
+      }
+
       await prisma.activityLog.create({
-        data: { campaignId: campaign.id, type: "scrape_done", message: `✅ Scraping completato: ${results.scraped} nuovi lead` },
+        data: { campaignId: campaign.id, type: "scrape_done", message: `✅ Scraping completato: ${newForCampaign} nuovi lead per "${query}"` },
       });
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -92,9 +130,9 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2. Analyze new leads WITH AI
+  // 2. Analyze leads that have NO analysis yet (never re-analyze)
   const newLeads = await prisma.lead.findMany({
-    where: { status: "new", website: { not: null } },
+    where: { website: { not: null }, analyses: { none: {} } },
     take: 20,
   });
 
@@ -116,6 +154,7 @@ export async function POST(request: NextRequest) {
       let aiDiagnosisJson: string | null = null;
       let aiScore: number | null = null;
       let aiTokens = 0;
+      let diagnosis: SiteDiagnosis | null = null;
 
       if (html?.extractedText) {
         try {
@@ -132,11 +171,16 @@ export async function POST(request: NextRequest) {
             isMobileFriendly: html.isMobileFriendly,
             hasModernDesign: html.hasModernDesign,
             hasCrm: html.hasCrm,
+            hasAnalytics: html.hasAnalytics,
+            hasSocialPresence: html.hasSocialPresence,
+            hasWhatsappWidget: html.hasWhatsappWidget,
+            hasContactForm: html.hasContactForm,
             detectedTechs: html.detectedTechs,
           });
 
           aiDiagnosisJson = JSON.stringify(diagResult.data);
           aiScore = diagResult.data.aiScore;
+          diagnosis = diagResult.data;
           aiTokens = diagResult.tokensUsed;
           results.totalTokens += diagResult.tokensUsed;
           results.diagnosed++;
@@ -195,7 +239,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 3. Generate emails for analyzed leads without messages (WITH AI context)
+  // 3. Generate drafts (email + WhatsApp) for analyzed leads without messages
   const analyzedLeads = await prisma.lead.findMany({
     where: {
       status: "analyzed",
@@ -234,12 +278,28 @@ export async function POST(request: NextRequest) {
       });
       results.totalTokens += emailResult.tokensUsed;
 
+      // Generate WhatsApp text
+      let whatsappText: string | null = null;
+      try {
+        const waResult = await generateWhatsAppMessage({
+          companyName: lead.companyName,
+          sector: lead.sector,
+          problem,
+          suggestedService: analysis.suggestedService || service,
+          personalizedHook: aiDiag?.personalizedHook ?? null,
+        });
+        whatsappText = waResult.data;
+        results.totalTokens += waResult.tokensUsed;
+      } catch { /* optional */ }
+
+      const messageType = lead.email ? "email" : lead.phone ? "whatsapp" : "email";
       const message = await prisma.message.create({
         data: {
           leadId: lead.id,
-          type: lead.email ? "email" : "whatsapp",
+          type: messageType,
           subject: emailResult.data.subject,
           content: emailResult.data.body,
+          whatsappContent: whatsappText,
           status: "draft",
         },
       });
@@ -248,21 +308,10 @@ export async function POST(request: NextRequest) {
         data: {
           leadId: lead.id, campaignId: lead.campaignId,
           type: "ai_generate",
-          message: `✉️ Email generata per ${lead.companyName} (${emailResult.tokensUsed} tokens)`,
+          message: `✉️ Testi generati per ${lead.companyName} (${emailResult.tokensUsed} tokens)`,
           metadata: JSON.stringify({ messageId: message.id, tokensUsed: emailResult.tokensUsed }),
         },
       });
-
-      try {
-        await notifyMessageReady({
-          leadId: lead.id,
-          messageId: message.id,
-          companyName: lead.companyName,
-          email: lead.email,
-          phone: lead.phone,
-          preview: emailResult.data.body,
-        });
-      } catch { /* telegram optional */ }
 
       results.generated++;
     } catch (e: unknown) {

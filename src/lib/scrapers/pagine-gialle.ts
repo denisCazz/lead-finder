@@ -72,7 +72,7 @@ export async function scrapePagineGialle(
       const res = await fetchWithRetry(url);
 
       if (!res.ok) {
-        console.error(`PagineGialle page ${page} returned ${res.status}`);
+        if (res.status !== 404) console.warn(`PagineGialle page ${page} returned ${res.status}`);
         break;
       }
 
