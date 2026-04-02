@@ -10,6 +10,52 @@ export interface ScrapedLead {
   source: string;
 }
 
+async function fetchWithRetry(
+  url: string,
+  maxRetries: number = 3
+): Promise<Response> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+          "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+          "Sec-Ch-Ua": '"Chromium";v="125", "Not.A/Brand";v="24"',
+          "Sec-Ch-Ua-Mobile": "?0",
+          "Sec-Ch-Ua-Platform": '"Windows"',
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1",
+          "Upgrade-Insecure-Requests": "1",
+          Referer: "https://www.paginegialle.it/",
+        },
+      });
+      clearTimeout(timeout);
+      return res;
+    } catch (err) {
+      clearTimeout(timeout);
+      if (attempt === maxRetries) throw err;
+      const backoff = attempt * 5000 + Math.random() * 3000;
+      console.warn(
+        `PagineGialle fetch attempt ${attempt}/${maxRetries} failed, retrying in ${Math.round(backoff)}ms...`
+      );
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  throw new Error("fetchWithRetry: unreachable");
+}
+
 export async function scrapePagineGialle(
   sector: string,
   city: string,
@@ -23,14 +69,7 @@ export async function scrapePagineGialle(
       const location = encodeURIComponent(city);
       const url = `https://www.paginegialle.it/ricerca/${query}/${location}/p-${page}`;
 
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
-        },
-      });
+      const res = await fetchWithRetry(url);
 
       if (!res.ok) {
         console.error(`PagineGialle page ${page} returned ${res.status}`);

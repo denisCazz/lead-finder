@@ -128,13 +128,13 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold flex items-center gap-2 mb-6">
-        <Settings className="w-8 h-8 text-[var(--primary)]" />
+      <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 mb-6">
+        <Settings className="w-7 h-7 sm:w-8 sm:h-8 text-[var(--primary)]" />
         Impostazioni
       </h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-[var(--muted)] rounded-lg p-1 max-w-lg">
+      <div className="flex gap-1 mb-6 bg-[var(--muted)] rounded-lg p-1 overflow-x-auto max-w-full sm:max-w-lg">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -156,7 +156,7 @@ export default function SettingsPage() {
         {activeTab === "general" && (
           <>
             {/* Email config */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
               <h2 className="text-lg font-semibold mb-4">Configurazione Email</h2>
               <div className="space-y-4">
                 <div>
@@ -182,7 +182,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Telegram */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
               <h2 className="text-lg font-semibold mb-4">Telegram Bot</h2>
               <p className="text-sm text-[var(--muted-foreground)] mb-4">
                 Configura TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID nel file .env per ricevere notifiche.
@@ -201,12 +201,12 @@ export default function SettingsPage() {
             </div>
 
             {/* CSV Import */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
               <h2 className="text-lg font-semibold mb-4">Import CSV</h2>
               <p className="text-sm text-[var(--muted-foreground)] mb-4">
                 Colonne: company/azienda, contact/referente, email, phone/telefono, website/sito, sector/settore, city/città, region/regione.
               </p>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
                 <input
                   type="file"
                   accept=".csv"
@@ -268,7 +268,7 @@ export default function SettingsPage() {
         {/* ═══ TAB: AUTOMAZIONE ═══ */}
         {activeTab === "automation" && (
           <>
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
               <h2 className="text-lg font-semibold mb-4">Cron Automatico (Ogni Ora)</h2>
               <p className="text-sm text-[var(--muted-foreground)] mb-4">
                 Il sistema può eseguire automaticamente scraping, analisi AI e generazione email ogni ora.
@@ -293,7 +293,7 @@ export default function SettingsPage() {
               {/* Webhook URL */}
               <div className="mb-4">
                 <label className="block text-sm text-[var(--muted-foreground)] mb-1">URL Webhook</label>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     readOnly
                     value={`${settings.app_url || window.location.origin}/api/cron/hourly`}

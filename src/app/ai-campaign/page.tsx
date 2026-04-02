@@ -174,11 +174,11 @@ export default function AiCampaignPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold flex items-center gap-3">
-          <Bot className="w-8 h-8 text-purple-400" />
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
+          <Bot className="w-7 h-7 sm:w-8 sm:h-8 text-purple-400" />
           AI Campaign
         </h1>
-        <p className="text-[var(--muted-foreground)] mt-1">
+        <p className="text-[var(--muted-foreground)] mt-1 text-sm">
           Descrivi il target in linguaggio naturale. L&apos;AI pianifica, cerca, analizza e genera email — tutto in autonomia.
         </p>
       </div>
@@ -186,7 +186,7 @@ export default function AiCampaignPage() {
       {/* Prompt Input */}
       <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6 mb-6">
         <label className="block text-sm font-medium mb-2">Cosa vuoi cercare?</label>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -204,7 +204,7 @@ export default function AiCampaignPage() {
           <button
             onClick={handleLaunch}
             disabled={running || !prompt.trim()}
-            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2 self-end"
+            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center justify-center gap-2 sm:self-end"
           >
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             {running ? "In corso..." : "Lancia AI"}
@@ -305,7 +305,7 @@ export default function AiCampaignPage() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           {[
             { label: "Lead trovati", value: stats.scraped, icon: Target, color: "text-blue-400" },
             { label: "Analizzati", value: stats.analyzed, icon: BarChart3, color: "text-yellow-400" },
@@ -371,7 +371,7 @@ export default function AiCampaignPage() {
 
       {/* Post-completion CTA */}
       {stats && !running && (
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap gap-3">
           <a
             href="/leads"
             className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm font-medium flex items-center gap-2"

@@ -54,10 +54,10 @@ export default async function DashboardPage() {
           </p>
         </div>
       )}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-[var(--muted-foreground)] mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
+          <p className="text-[var(--muted-foreground)] mt-1 text-sm">
             Panoramica del sistema di lead generation
           </p>
         </div>
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-8">
         {cards.map((card) => (
           <div
             key={card.label}
@@ -80,8 +80,8 @@ export default async function DashboardPage() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-[var(--muted-foreground)]">{card.label}</p>
-                <p className="text-3xl font-bold mt-1">{card.value}</p>
+                <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{card.label}</p>
+                <p className="text-2xl sm:text-3xl font-bold mt-1">{card.value}</p>
               </div>
               <card.icon className={`w-8 h-8 ${card.color} opacity-80`} />
             </div>
@@ -94,28 +94,23 @@ export default async function DashboardPage() {
           <TrendingUp className="w-5 h-5 text-[var(--primary)]" />
           Funnel di Conversione
         </h2>
-        <div className="flex items-center gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: "Trovati", value: stats.totalLeads, pct: 100 },
             { label: "Analizzati", value: stats.analyzedLeads, pct: stats.totalLeads ? Math.round((stats.analyzedLeads / stats.totalLeads) * 100) : 0 },
             { label: "Messaggi", value: stats.totalMessages, pct: stats.totalLeads ? Math.round((stats.totalMessages / stats.totalLeads) * 100) : 0 },
             { label: "Inviati", value: stats.sentMessages, pct: stats.totalMessages ? Math.round((stats.sentMessages / stats.totalMessages) * 100) : 0 },
-          ].map((step, i) => (
-            <div key={step.label} className="flex-1">
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-[var(--muted-foreground)]">{step.label}</span>
-                    <span className="font-medium">{step.value}</span>
-                  </div>
-                  <div className="h-2 bg-[var(--muted)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--primary)] rounded-full transition-all"
-                      style={{ width: `${step.pct}%` }}
-                    />
-                  </div>
-                </div>
-                {i < 3 && <span className="text-[var(--muted-foreground)]">&rarr;</span>}
+          ].map((step) => (
+            <div key={step.label}>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-[var(--muted-foreground)]">{step.label}</span>
+                <span className="font-medium">{step.value}</span>
+              </div>
+              <div className="h-2 bg-[var(--muted)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[var(--primary)] rounded-full transition-all"
+                  style={{ width: `${step.pct}%` }}
+                />
               </div>
             </div>
           ))}

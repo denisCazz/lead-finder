@@ -77,25 +77,25 @@ export default function LeadsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Users className="w-8 h-8 text-[var(--primary)]" />
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <Users className="w-7 h-7 sm:w-8 sm:h-8 text-[var(--primary)]" />
             Leads
           </h1>
-          <p className="text-[var(--muted-foreground)] mt-1">{total} lead totali</p>
+          <p className="text-[var(--muted-foreground)] mt-1 text-sm">{total} lead totali</p>
         </div>
         <Link
           href="/campaigns"
-          className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm font-medium"
+          className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm font-medium text-center"
         >
           + Nuova Campagna
         </Link>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 mb-6">
+        <div className="relative flex-1 sm:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)]" />
           <input
             type="text"

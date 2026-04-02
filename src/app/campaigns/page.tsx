@@ -148,17 +148,17 @@ export default function CampaignsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Megaphone className="w-8 h-8 text-[var(--primary)]" />
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <Megaphone className="w-7 h-7 sm:w-8 sm:h-8 text-[var(--primary)]" />
             Campagne
           </h1>
-          <p className="text-[var(--muted-foreground)] mt-1">{campaigns.length} campagne</p>
+          <p className="text-[var(--muted-foreground)] mt-1 text-sm">{campaigns.length} campagne</p>
         </div>
         <button
           onClick={() => setShowCreate(!showCreate)}
-          className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm font-medium flex items-center gap-2"
+          className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm font-medium flex items-center justify-center gap-2"
         >
           <Plus className="w-4 h-4" /> Nuova Campagna
         </button>

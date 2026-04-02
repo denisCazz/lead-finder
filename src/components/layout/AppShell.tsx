@@ -14,7 +14,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Sidebar />
-      <main className="ml-64 min-h-screen p-8">{children}</main>
+      <main className="min-h-screen pt-14 px-4 pb-6 lg:pt-0 lg:ml-64 lg:p-8">{children}</main>
     </>
   );
 }

@@ -62,13 +62,13 @@ export default function MessagesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <MessageSquare className="w-8 h-8 text-[var(--primary)]" />
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <MessageSquare className="w-7 h-7 sm:w-8 sm:h-8 text-[var(--primary)]" />
             Messaggi
           </h1>
-          <p className="text-[var(--muted-foreground)] mt-1">{messages.length} messaggi</p>
+          <p className="text-[var(--muted-foreground)] mt-1 text-sm">{messages.length} messaggi</p>
         </div>
       </div>
 
@@ -97,8 +97,8 @@ export default function MessagesPage() {
         <div className="space-y-3">
           {messages.map((msg) => (
             <div key={msg.id} className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3 flex-wrap">
                   <span className={`text-xs px-2 py-1 rounded-full ${
                     msg.status === "draft" ? "bg-gray-500/20 text-gray-400" :
                     msg.status === "approved" ? "bg-blue-500/20 text-blue-400" :
@@ -111,7 +111,7 @@ export default function MessagesPage() {
                     {msg.lead.companyName}
                   </a>
                   {msg.subject && (
-                    <span className="text-sm text-[var(--muted-foreground)] truncate max-w-md">
+                    <span className="text-sm text-[var(--muted-foreground)] truncate max-w-xs sm:max-w-md">
                       {msg.subject}
                     </span>
                   )}

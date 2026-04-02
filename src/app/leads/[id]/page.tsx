@@ -134,10 +134,10 @@ export default function LeadDetailPage() {
         <ArrowLeft className="w-4 h-4" /> Torna ai Lead
       </Link>
 
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold">{lead.companyName}</h1>
-          <div className="flex items-center gap-4 mt-2 text-sm text-[var(--muted-foreground)]">
+          <h1 className="text-2xl sm:text-3xl font-bold">{lead.companyName}</h1>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-sm text-[var(--muted-foreground)]">
             {lead.sector && <span className="bg-[var(--muted)] px-2 py-0.5 rounded">{lead.sector}</span>}
             {lead.city && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {lead.city}</span>}
             {lead.source && <span>Fonte: {lead.source}</span>}
@@ -147,7 +147,7 @@ export default function LeadDetailPage() {
           <button
             onClick={handleAnalyze}
             disabled={analyzing}
-            className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+            className="flex-1 sm:flex-none px-4 py-2 bg-yellow-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2"
           >
             <BarChart3 className="w-4 h-4" />
             {analyzing ? "Analisi..." : "Analizza"}
@@ -155,7 +155,7 @@ export default function LeadDetailPage() {
           <button
             onClick={handleGenerate}
             disabled={generating}
-            className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+            className="flex-1 sm:flex-none px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2"
           >
             <Sparkles className="w-4 h-4" />
             {generating ? "Generazione..." : "Genera Messaggio"}
@@ -405,8 +405,8 @@ export default function LeadDetailPage() {
           <div className="space-y-4">
             {lead.messages.map((msg) => (
               <div key={msg.id} className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className={`text-xs px-2 py-1 rounded-full ${
                       msg.status === "draft" ? "bg-gray-500/20 text-gray-400" :
                       msg.status === "approved" ? "bg-blue-500/20 text-blue-400" :
