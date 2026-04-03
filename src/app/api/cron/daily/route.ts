@@ -25,8 +25,8 @@ import { extractDomain } from "@/lib/utils";
  * 3. Generate email draft + WhatsApp text for each analyzed lead
  * NO emails are sent here — sending is delegated to the morning cron.
  */
-export async function POST(request: NextRequest) {
-  // Auth check
+async function handler(request: NextRequest) {
+  // Auth check — skip if no CRON_SECRET configured
   const secret = request.headers.get("x-cron-secret");
   const envSecret = process.env.CRON_SECRET;
   if (envSecret && secret !== envSecret) {
@@ -333,3 +333,6 @@ export async function POST(request: NextRequest) {
   clearPromptCache();
   return NextResponse.json(results);
 }
+
+export const POST = handler;
+export const GET = handler; // allows cron services that send GET

@@ -117,3 +117,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ...stats, cap: maxPerDay, sentTodayBefore: sentToday });
 }
+
+export const GET = POST; // allows cron services that send GET

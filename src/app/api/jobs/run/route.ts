@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
   }
 
   const secret = process.env.CRON_SECRET || "";
-  const baseUrl = process.env.NEXTAUTH_URL || `http://localhost:${process.env.PORT || 3000}`;
+  // Always call localhost directly — bypass Traefik/nginx which can strip custom headers
+  const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
   const url = `${baseUrl}${JOB_MAP[job]}`;
 
   const response = await fetch(url, {

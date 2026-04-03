@@ -74,3 +74,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ suggestions, created, tokensUsed });
 }
+
+export const GET = POST; // allows cron services that send GET
