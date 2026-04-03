@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const JOB_MAP: Record<string, string> = {
+  continuous: "/api/cron/continuous?force=true",
   daily: "/api/cron/daily",
   morning: "/api/cron/morning",
   "suggest-cities": "/api/ai/suggest-cities",
@@ -11,7 +12,7 @@ const JOB_MAP: Record<string, string> = {
  * Proxy that triggers a cron/AI job server-side (never exposes CRON_SECRET to the client).
  * Protected by the auth middleware (cookie-based session).
  *
- * Body: { job: "daily" | "morning" | "suggest-cities", params?: Record<string, unknown> }
+ * Body: { job: "continuous" | "daily" | "morning" | "suggest-cities", params?: Record<string, unknown> }
  */
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
@@ -28,7 +29,9 @@ export async function POST(request: NextRequest) {
   // Always call localhost directly — bypass Traefik/nginx which can strip custom headers
   const port = process.env.PORT || 3000;
   const baseUrl = `http://localhost:${port}`;
-  const url = `${baseUrl}${JOB_MAP[job]}`;
+  // force=true bypasses setting gates for manual test runs
+  const jobPath = job === "morning" ? `${JOB_MAP[job]}?force=true` : JOB_MAP[job];
+  const url = `${baseUrl}${jobPath}`;
 
   const mask = (s: string) => s ? `${s.slice(0, 3)}***${s.slice(-2)} (len=${s.length})` : "(empty)";
   console.log(`[jobs/run] → ${url}`);

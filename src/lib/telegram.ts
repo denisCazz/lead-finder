@@ -1,5 +1,15 @@
 const TELEGRAM_API = "https://api.telegram.org/bot";
 
+export type TelegramLeadSummary = {
+  id: number;
+  companyName: string;
+  sector: string | null;
+  city: string | null;
+  website: string | null;
+  score: number;
+  issues?: string;
+};
+
 function getConfig() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -69,6 +79,30 @@ ${lead.issues ? `\n⚠️ Problemi: ${escapeHtml(lead.issues)}` : ""}`;
   return sendTelegramMessage(text, keyboard);
 }
 
+export async function notifyLeadBatch(data: {
+  leads: TelegramLeadSummary[];
+  batchNumber: number;
+  batchSize: number;
+  totalCollected: number;
+}) {
+  const preview = data.leads.slice(0, 8).map((lead, index) => {
+    const location = [lead.city, lead.sector].filter(Boolean).join(" • ") || "N/A";
+    const site = lead.website ? ` — ${escapeHtml(lead.website)}` : "";
+    return `${index + 1}. <b>${escapeHtml(lead.companyName)}</b> (${escapeHtml(location)}) • score ${lead.score}${site}`;
+  }).join("\n");
+
+  const remainder = data.leads.length - Math.min(data.leads.length, 8);
+  const footer = remainder > 0 ? `\n…e altri ${remainder} lead nello stesso batch.` : "";
+
+  const text = `📦 <b>Batch lead #${data.batchNumber}</b>\n\n`
+    + `Nuovi lead raccolti: <b>${data.leads.length}</b>\n`
+    + `Totale lead del run: <b>${data.totalCollected}</b>\n`
+    + `Soglia batch Telegram: ${data.batchSize}\n\n`
+    + `${preview}${footer}`;
+
+  return sendTelegramMessage(text);
+}
+
 export async function notifyMessageReady(data: {
   leadId: number;
   messageId: number;
@@ -111,13 +145,19 @@ export async function notifyDailySummary(stats: {
   analyzed: number;
   messagesGenerated: number;
   messagesSent: number;
+  errors?: string[];
+  campaignsCreated?: number;
+  campaignsProcessed?: number;
 }) {
-  const text = `📊 <b>Riepilogo Giornaliero</b>
+  const text = `📊 <b>Riepilogo Automazione</b>
 
 🆕 Nuovi lead: ${stats.newLeads}
 🔍 Analizzati: ${stats.analyzed}
-✉️ Messaggi generati: ${stats.messagesGenerated}
-📤 Messaggi inviati: ${stats.messagesSent}`;
+✉️ Testi generati: ${stats.messagesGenerated}
+📤 Email inviate: ${stats.messagesSent}
+🚀 Campagne create: ${stats.campaignsCreated ?? 0}
+🎯 Campagne processate: ${stats.campaignsProcessed ?? 0}
+❌ Errori: ${stats.errors?.length ?? 0}${stats.errors && stats.errors.length > 0 ? `\n\nDettagli:\n${stats.errors.slice(0, 5).map((error) => `• ${escapeHtml(error)}`).join("\n")}` : ""}`;
 
   return sendTelegramMessage(text);
 }

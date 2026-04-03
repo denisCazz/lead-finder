@@ -122,7 +122,7 @@ export default function OutreachPage() {
             Outreach Manuale
           </h1>
           <p className="text-sm text-[var(--muted-foreground)] mt-1">
-            Lead da contattare manualmente — solo telefono, o score basso per auto-invio
+            Lead da contattare manualmente: solo telefono oppure revisione manuale decisa dall&apos;AI
           </p>
         </div>
         <button
@@ -167,7 +167,7 @@ export default function OutreachPage() {
         <div className="text-center py-16 text-[var(--muted-foreground)]">
           <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-500/50" />
           <p className="font-medium">Nessun lead da contattare manualmente.</p>
-          <p className="text-sm mt-1">Zona libera! Tutti i lead ad alto score vengono inviati automaticamente.</p>
+          <p className="text-sm mt-1">Zona libera! Tutti i lead approvati dall&apos;AI sono gia&apos; andati in invio automatico.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -192,9 +192,9 @@ export default function OutreachPage() {
                           Solo telefono
                         </span>
                       )}
-                      {lead.email && lead.score < 70 && (
+                      {lead.email && message?.status === "draft" && (
                         <span className="text-xs px-2 py-0.5 rounded bg-orange-900/30 text-orange-300 border border-orange-600/30">
-                          Score basso
+                          Revisione AI/manuale
                         </span>
                       )}
                     </div>

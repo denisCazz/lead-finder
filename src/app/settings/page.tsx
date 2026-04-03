@@ -17,17 +17,28 @@ const PROMPT_FIELDS = [
   {
     key: "prompt_qualification",
     label: "Prompt Qualifica Lead",
-    description: "Istruzioni per determinare la priorità e il canale di contatto di un lead.",
+    description: "Istruzioni per far decidere all'AI se il lead va inviato subito via email, rivisto manualmente o scartato.",
   },
   {
     key: "prompt_campaign_plan",
     label: "Prompt Pianificazione Campagna",
-    description: "Istruzioni per trasformare una richiesta in un piano di campagna strutturato.",
+    description: "Istruzioni per trasformare una richiesta in un solo piano campagna strutturato e realistico.",
+  },
+  {
+    key: "prompt_whatsapp",
+    label: "Prompt WhatsApp",
+    description: "Istruzioni per generare messaggi WhatsApp brevi, umani e pronti per outreach manuale.",
+  },
+  {
+    key: "prompt_city_suggestion",
+    label: "Prompt Suggerimento Città",
+    description: "Istruzioni per scegliere la prossima città più promettente e creare una sola campagna per volta.",
   },
 ];
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Record<string, string>>({});
+  // Computed here so it's available throughout the whole render, not just inside an IIFE
   const [defaults, setDefaults] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,8 +47,9 @@ export default function SettingsPage() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copiedContinuous, setCopiedContinuous] = useState(false);
   const [activeTab, setActiveTab] = useState<"general" | "prompts" | "automation">("general");
+  const appUrl = settings.app_url || (typeof window !== "undefined" ? window.location.origin : "");
 
   useEffect(() => {
     Promise.all([
@@ -90,32 +102,6 @@ export default function SettingsPage() {
     setImportResult(`Importati ${data.imported || 0} lead`);
     setImporting(false);
     setCsvFile(null);
-  }
-
-  function copyWebhookUrl() {
-    const baseUrl = settings.app_url || window.location.origin;
-    navigator.clipboard.writeText(`${baseUrl}/api/cron/hourly`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function handleTestCron() {
-    setTestResult("Esecuzione cron in corso...");
-    try {
-      const secret = settings.cron_secret || "";
-      const res = await fetch("/api/cron/hourly", {
-        method: "POST",
-        headers: { "x-cron-secret": secret },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setTestResult(`Cron completato! Lead: ${data.scraped}, Analizzati: ${data.analyzed}, Email: ${data.generated}`);
-      } else {
-        setTestResult(`Errore: ${data.error || "sconosciuto"}`);
-      }
-    } catch (e) {
-      setTestResult(`Errore: ${e instanceof Error ? e.message : "sconosciuto"}`);
-    }
   }
 
   if (loading) return <div className="text-center py-16 text-[var(--muted-foreground)]">Caricamento...</div>;
@@ -177,6 +163,7 @@ export default function SettingsPage() {
                     onChange={(e) => setSettings({ ...settings, max_emails_per_day: e.target.value })}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm"
                   />
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">Usato solo dal worker Invio Mail nei lanci manuali o di debug. L&apos;Automazione Completa invia subito tutte le email approvate dall&apos;AI.</p>
                 </div>
               </div>
             </div>
@@ -268,172 +255,136 @@ export default function SettingsPage() {
         {/* ═══ TAB: AUTOMAZIONE ═══ */}
         {activeTab === "automation" && (
           <>
+            {/* ── Loop Continuo ── */}
             <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
-              <h2 className="text-lg font-semibold mb-4">Cron Automatico (Ogni Ora)</h2>
-              <p className="text-sm text-[var(--muted-foreground)] mb-4">
-                Il sistema può eseguire automaticamente scraping, analisi AI e generazione email ogni ora.
-                Configura un servizio esterno (cron-job.org, UptimeRobot, ecc.) per chiamare il webhook.
-              </p>
-
-              {/* Toggle */}
-              <div className="flex items-center gap-3 mb-4">
-                <label className="text-sm font-medium">Abilitato</label>
-                <button
-                  onClick={() => setSettings({ ...settings, cron_enabled: settings.cron_enabled === "true" ? "false" : "true" })}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${
-                    settings.cron_enabled === "true" ? "bg-green-600" : "bg-gray-600"
-                  }`}
-                >
-                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                    settings.cron_enabled === "true" ? "translate-x-6" : "translate-x-0.5"
-                  }`} />
-                </button>
-              </div>
-
-              {/* Auto-send toggle */}
-              <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6 mb-6">
-                <h2 className="text-lg font-semibold mb-4">Invio Automatico Email (Cron Mattutino)</h2>
-                <p className="text-sm text-[var(--muted-foreground)] mb-4">
-                  Il cron mattutino (09:00) invia automaticamente le email ai lead con score sopra la soglia.
-                  Le email vengono inviate solo se c&apos;è un indirizzo email disponibile e il messaggio è in stato bozza.
-                </p>
-
-                <div className="space-y-4">
-                  {/* auto_send_enabled */}
-                  <div className="flex items-center gap-3">
-                    <label className="text-sm font-medium">Invio automatico abilitato</label>
-                    <button
-                      onClick={() => setSettings({ ...settings, auto_send_enabled: settings.auto_send_enabled === "true" ? "false" : "true" })}
-                      className={`relative w-12 h-6 rounded-full transition-colors ${
-                        settings.auto_send_enabled === "true" ? "bg-green-600" : "bg-gray-600"
-                      }`}
-                    >
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                        settings.auto_send_enabled === "true" ? "translate-x-6" : "translate-x-0.5"
-                      }`} />
-                    </button>
-                  </div>
-
-                  {/* auto_send_min_score */}
-                  <div>
-                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">
-                      Score minimo per invio automatico
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={settings.auto_send_min_score || "70"}
-                      onChange={(e) => setSettings({ ...settings, auto_send_min_score: e.target.value })}
-                      className="w-32 px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm"
-                    />
-                    <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                      Lead con score &lt; questa soglia vanno in Outreach manuale
-                    </p>
-                  </div>
-
-                  {/* morning webhook */}
-                  <div>
-                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">Webhook Cron Mattutino (09:00)</label>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <input
-                        readOnly
-                        value={`${settings.app_url || (typeof window !== "undefined" ? window.location.origin : "")}/api/cron/morning`}
-                        className="flex-1 px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  {/* night webhook */}
-                  <div>
-                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">Webhook Cron Notturno (02:00)</label>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <input
-                        readOnly
-                        value={`${settings.app_url || (typeof window !== "undefined" ? window.location.origin : "")}/api/cron/daily`}
-                        className="flex-1 px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Webhook URL (hourly, legacy) */}
-              <div className="mb-4">
-                <label className="block text-sm text-[var(--muted-foreground)] mb-1">URL Webhook (ogni ora)</label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    readOnly
-                    value={`${settings.app_url || (typeof window !== "undefined" ? window.location.origin : "")}/api/cron/hourly`}
-                    className="flex-1 px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm font-mono"
-                  />
+              <div className="flex items-center justify-between mb-2 gap-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  ♻️ Automazione Completa
+                  <span className="text-xs font-normal text-[var(--muted-foreground)] bg-[var(--muted)] px-2 py-0.5 rounded-full">consigliato</span>
+                </h2>
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${settings.automation_enabled !== "false" ? "text-green-400" : "text-[var(--muted-foreground)]"}`}>
+                    {settings.automation_enabled !== "false" ? "Abilitato" : "Disabilitato"}
+                  </span>
                   <button
-                    onClick={copyWebhookUrl}
-                    className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm flex items-center gap-1"
+                    onClick={() => setSettings({ ...settings, automation_enabled: settings.automation_enabled !== "false" ? "false" : "true" })}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${settings.automation_enabled !== "false" ? "bg-green-600" : "bg-gray-600"}`}
+                    aria-label="Toggle automazione continua"
                   >
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copied ? "Copiato" : "Copia"}
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.automation_enabled !== "false" ? "translate-x-6" : "translate-x-0.5"}`} />
                   </button>
                 </div>
               </div>
-
-              {/* Cron Secret */}
-              <div className="mb-4">
-                <label className="block text-sm text-[var(--muted-foreground)] mb-1">Cron Secret</label>
-                <input
-                  type="text"
-                  value={settings.cron_secret || ""}
-                  onChange={(e) => setSettings({ ...settings, cron_secret: e.target.value })}
-                  placeholder="Un segreto che il servizio esterno invierà come header x-cron-secret"
-                  className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm font-mono"
-                />
-                <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                  Deve corrispondere alla variabile d&apos;ambiente CRON_SECRET nel file .env
-                </p>
+              <p className="text-sm text-[var(--muted-foreground)] mb-4">
+                Questo e&apos; l&apos;unico job da schedulare: l&apos;AI crea automaticamente una nuova campagna gestita per ogni settore configurato, esegue Ricerca Clienti, Analisi Clienti e Invio Mail. La decisione di inviare o meno l&apos;email e&apos; presa dall&apos;AI lead per lead.
+              </p>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">Intervallo minimo tra due run</label>
+                    <input
+                      type="number"
+                      min="15"
+                      step="15"
+                      value={settings.automation_interval_minutes || "120"}
+                      onChange={(e) => setSettings({ ...settings, automation_interval_minutes: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm"
+                    />
+                    <p className="text-xs text-[var(--muted-foreground)] mt-1">Se cron-job.org lo chiama prima, il job si auto-salta.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">Ultima esecuzione continua</label>
+                    <div className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm text-[var(--muted-foreground)]">
+                      {settings.last_continuous_run_at || "Mai eseguito"}
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted-foreground)] mb-1">Settori da automatizzare</label>
+                  <textarea
+                    value={settings.automation_sectors || ""}
+                    onChange={(e) => setSettings({ ...settings, automation_sectors: e.target.value })}
+                    rows={4}
+                    placeholder={"ristoranti\nhotel e b&b\nedilizia\nofficine auto"}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm resize-y"
+                  />
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">Un settore per riga. L&apos;Automazione Completa usa solo campagne AI gestite automaticamente, senza lanciare le campagne manuali gia&apos; presenti.</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">Politica Email del loop</label>
+                    <div className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm text-[var(--muted-foreground)]">
+                      L&apos;AI decide se ogni lead e&apos; pronto per invio immediato, revisione manuale o scarto. Il worker Invio Mail spedisce solo i messaggi approvati dall&apos;AI.
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-1">Politica Telegram del loop</label>
+                    <div className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm text-[var(--muted-foreground)]">
+                      Notifica un batch ogni 30 lead trovati e un riepilogo finale con email inviate ed errori.
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted-foreground)] mb-1">URL Webhook</label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      readOnly
+                      value={`${appUrl}/api/cron/continuous`}
+                      className="flex-1 px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm font-mono"
+                    />
+                    <button
+                      onClick={() => {
+                        const url = `${appUrl}/api/cron/continuous`;
+                        navigator.clipboard.writeText(url);
+                        setCopiedContinuous(true);
+                        setTimeout(() => setCopiedContinuous(false), 2000);
+                      }}
+                      className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm flex items-center gap-1"
+                    >
+                      {copiedContinuous ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      {copiedContinuous ? "Copiato" : "Copia"}
+                    </button>
+                  </div>
+                </div>
               </div>
-
-              {/* App URL */}
-              <div className="mb-4">
-                <label className="block text-sm text-[var(--muted-foreground)] mb-1">URL App (per webhook)</label>
-                <input
-                  type="url"
-                  value={settings.app_url || ""}
-                  onChange={(e) => setSettings({ ...settings, app_url: e.target.value })}
-                  placeholder="https://tuodominio.com"
-                  className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm"
-                />
-              </div>
-
-              {/* Test button */}
-              <button
-                onClick={handleTestCron}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:opacity-90 text-sm font-medium flex items-center gap-2"
-              >
-                <Clock className="w-4 h-4" /> Esegui Cron Adesso
-              </button>
-              {testResult && activeTab === "automation" && (
-                <p className={`text-sm mt-2 ${testResult.includes("completato") ? "text-green-400" : testResult.includes("corso") ? "text-yellow-400" : "text-red-400"}`}>
-                  {testResult}
-                </p>
-              )}
             </div>
 
-            {/* Instructions */}
+            {/* ── Configurazione Generale ── */}
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
+              <h2 className="text-lg font-semibold mb-4">Configurazione Generale</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-[var(--muted-foreground)] mb-1">App URL</label>
+                  <input
+                    type="url"
+                    value={settings.app_url || ""}
+                    onChange={(e) => setSettings({ ...settings, app_url: e.target.value })}
+                    placeholder="https://tuodominio.com"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted-foreground)] mb-1">Gestione Secret Cron</label>
+                  <div className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm text-[var(--muted-foreground)]">
+                    Il secret reale non viene mostrato né salvato qui. Va configurato solo nel file <code className="bg-[var(--card)] px-1 rounded">.env</code> del server e replicato come header su cron-job.org.
+                  </div>
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                    La UI espone solo gli endpoint; il valore effettivo resta server-side.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Istruzioni cron-job.org ── */}
             <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
-              <h2 className="text-lg font-semibold mb-4">Come Configurare</h2>
+              <h2 className="text-lg font-semibold mb-4">Configurazione cron-job.org</h2>
               <ol className="text-sm text-[var(--muted-foreground)] list-decimal list-inside space-y-2">
-                <li>Imposta <code className="bg-[var(--muted)] px-1 rounded">CRON_SECRET</code> nel file .env del server</li>
-                <li>Inserisci lo stesso segreto nel campo &quot;Cron Secret&quot; qui sopra</li>
-                <li>Vai su <a href="https://cron-job.org" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">cron-job.org</a> (gratuito) o un servizio simile</li>
-                <li>Crea un nuovo cron job con:
-                  <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
-                    <li>URL: il webhook copiato sopra</li>
-                    <li>Metodo: POST (o GET)</li>
-                    <li>Header custom: <code className="bg-[var(--muted)] px-1 rounded">x-cron-secret: IL_TUO_SEGRETO</code></li>
-                    <li>Frequenza: ogni 60 minuti</li>
-                  </ul>
-                </li>
-                <li>Attiva il toggle &quot;Abilitato&quot; qui sopra e salva</li>
+                <li>Vai su <a href="https://cron-job.org" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">cron-job.org</a> → <strong>Create Cronjob</strong></li>
+                <li>Job consigliato unico: <strong>Automazione Completa</strong> → URL <code className="bg-[var(--muted)] px-1 rounded">/api/cron/continuous</code>, schedule suggerito <code className="bg-[var(--muted)] px-1 rounded">5 * * * *</code></li>
+                <li>Imposta <code className="bg-[var(--muted)] px-1 rounded">automation_interval_minutes</code> per non farlo girare troppo spesso. Se viene chiamato prima, si auto-salta.</li>
+                <li>Non schedulare i worker interni <code className="bg-[var(--muted)] px-1 rounded">/api/cron/daily</code> e <code className="bg-[var(--muted)] px-1 rounded">/api/cron/morning</code>: corrispondono a <strong>Ricerca Clienti + Analisi Clienti</strong> e <strong>Invio Mail</strong> e vengono usati solo dall&apos;Automazione Completa.</li>
+                <li>Per il job continuo: Advanced → Request headers → aggiungi <code className="bg-[var(--muted)] px-1 rounded">x-cron-secret: [CRON_SECRET]</code></li>
+                <li>Testa prima dalla pagina <a href="/jobs" className="text-blue-400 underline">Jobs</a>, poi controlla gli esiti in <a href="/logs" className="text-blue-400 underline">Log</a>.</li>
               </ol>
             </div>
           </>

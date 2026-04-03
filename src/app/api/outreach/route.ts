@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
  * GET /api/outreach
  * Returns leads that need manual outreach:
  * - Has phone but no email (WhatsApp candidates)
- * - OR: has email + message draft but score < auto_send_min_score (manual email queue)
+ * - OR: has email + message status=draft because the AI decided manual review
  * - Status is NOT "contacted" or "rejected"
  */
 export async function GET(request: NextRequest) {
@@ -16,18 +16,14 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1", 10);
   const limit = 25;
 
-  const settingRow = await prisma.setting.findUnique({ where: { key: "auto_send_min_score" } });
-  const minScore = parseInt(settingRow?.value || "70", 10);
-
   const where = {
     status: { notIn: ["contacted", "rejected"] as string[] },
     OR: [
       // Phone-only: WhatsApp candidate
       { phone: { not: null }, email: null },
-      // Has email but score too low for auto-send — needs manual decision
+      // Has email but the AI left the generated message in manual review
       {
         email: { not: null },
-        score: { lt: minScore },
         messages: { some: { status: "draft" } },
       },
     ],
@@ -67,7 +63,7 @@ export async function GET(request: NextRequest) {
       })
     : leads;
 
-  return NextResponse.json({ leads: filtered, total, page, minScore });
+  return NextResponse.json({ leads: filtered, total, page });
 }
 
 /**

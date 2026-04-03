@@ -153,6 +153,7 @@ export interface LeadQualification {
   reason: string;
   bestTiming: string;
   suggestedChannel: string;
+  recommendedAction: "send_now" | "review_manually" | "do_not_contact";
 }
 
 export async function qualifyLeadWithAI(input: {
@@ -178,7 +179,20 @@ Confidence: ${input.diagnosis.confidence}`;
     userPrompt,
     (text) => {
       const cleaned = text.replace(/```json\n?|```/g, "").trim();
-      return JSON.parse(cleaned);
+      const parsed = JSON.parse(cleaned) as Partial<LeadQualification>;
+      const fallbackAction = parsed.priority === "scartare"
+        ? "do_not_contact"
+        : parsed.suggestedChannel === "email"
+          ? "send_now"
+          : "review_manually";
+
+      return {
+        priority: parsed.priority || "media",
+        reason: parsed.reason || "Lead da rivedere manualmente",
+        bestTiming: parsed.bestTiming || "subito",
+        suggestedChannel: parsed.suggestedChannel || "email",
+        recommendedAction: parsed.recommendedAction || fallbackAction,
+      };
     },
     { temperature: 0.4, maxTokens: 300 }
   );

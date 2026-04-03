@@ -5,11 +5,13 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const campaignId = searchParams.get("campaignId");
   const leadId = searchParams.get("leadId");
-  const limit = parseInt(searchParams.get("limit") || "50");
+  const type = searchParams.get("type");
+  const limit = parseInt(searchParams.get("limit") || "200");
 
   const where: Record<string, unknown> = {};
   if (campaignId) where.campaignId = parseInt(campaignId);
   if (leadId) where.leadId = parseInt(leadId);
+  if (type && type !== "all") where.type = { contains: type };
 
   const logs = await prisma.activityLog.findMany({
     where,

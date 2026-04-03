@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const sector: string = body.sector || "";
   const autoCreate: boolean = body.autoCreate === true;
+  const forceCreate: boolean = body.forceCreate === true;
 
   if (!sector) {
     return NextResponse.json({ error: "sector is required" }, { status: 400 });
@@ -51,28 +52,52 @@ export async function POST(request: NextRequest) {
 
   // Optionally auto-create campaigns for high-priority suggestions
   const created: { campaignId: number; city: string }[] = [];
+  let autoCreateSkipped: string | null = null;
   if (autoCreate && suggestions) {
-    for (const s of suggestions.filter((s) => s.priority === "alta")) {
-      // Avoid duplicating an existing active campaign for same sector+city
-      const existing = await prisma.campaign.findFirst({
-        where: { sector, city: s.city, status: "active" },
-      });
-      if (!existing) {
-        const campaign = await prisma.campaign.create({
-          data: {
-            name: `${sector} – ${s.city} (AI)`,
-            sector,
-            city: s.city,
-            region: s.region,
-            status: "active",
-          },
+    const activeCampaign = await prisma.campaign.findFirst({
+      where: { sector, status: "active" },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (activeCampaign && !forceCreate) {
+      autoCreateSkipped = `Esiste gia una campagna attiva per "${sector}": ${activeCampaign.name}`;
+    } else {
+      const preferred = suggestions.find((s) => s.priority === "alta") || suggestions[0];
+      if (preferred) {
+        const existing = await prisma.campaign.findFirst({
+          where: { sector, city: preferred.city, status: "active" },
         });
-        created.push({ campaignId: campaign.id, city: s.city });
+
+        if (existing) {
+          autoCreateSkipped = `La campagna per ${preferred.city} esiste gia ed e attiva.`;
+        } else {
+          const campaign = await prisma.campaign.create({
+            data: {
+              name: `${sector} – ${preferred.city} (AI)`,
+              sector,
+              city: preferred.city,
+              region: preferred.region,
+              status: "active",
+            },
+          });
+          created.push({ campaignId: campaign.id, city: preferred.city });
+
+          await prisma.activityLog.create({
+            data: {
+              campaignId: campaign.id,
+              type: "ai_campaign_created",
+              message: `🚀 Campagna creata automaticamente per ${sector} a ${preferred.city}`,
+              metadata: JSON.stringify({ source: "suggest-cities", tokensUsed, priority: preferred.priority }),
+            },
+          });
+        }
+      } else {
+        autoCreateSkipped = "Nessun suggerimento disponibile per creare una nuova campagna.";
       }
     }
   }
 
-  return NextResponse.json({ suggestions, created, tokensUsed });
+  return NextResponse.json({ suggestions, created, autoCreateSkipped, tokensUsed });
 }
 
 export const GET = POST; // allows cron services that send GET

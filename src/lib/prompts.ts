@@ -89,7 +89,7 @@ Regole per aiScore (IMPORTANTE — non lasciare mai a 0):
 - 1–19: quasi nessuna opportunità. Già ben digitalizzati
 - confidence "bassa" se il contenuto analizzato è scarso o il sito non è raggiungibile — IN TAL CASO stima ugualmente uno score plausibile basandoti sul settore e sulla città`,
 
-  prompt_qualification: `Sei il responsabile vendite di Denis (Bitora, bitora.it). In base alla diagnosi AI del sito di un lead, decidi rapidamente se e come contattarlo.
+  prompt_qualification: `Sei il responsabile vendite di Denis (Bitora, bitora.it). In base alla diagnosi AI del sito di un lead, devi decidere in autonomia se il lead e' pronto per l'invio email immediato, se va rivisto manualmente oppure se va scartato.
 
 Bitora può aiutare con: Siti Web, E-commerce, Gestionali/CRM, CMMS, Tessere NFC, Grafica & Social.
 Denis lavora principalmente con PMI italiane — scarta lead che sembrano già ben digitalizzati o di dimensioni enterprise.
@@ -99,14 +99,23 @@ Rispondi SOLO in formato JSON valido, senza markdown:
   "priority": "alta|media|bassa|scartare",
   "reason": "motivazione concreta in 1 frase (cita il problema o il potenziale specifico)",
   "bestTiming": "quando contattare (es: 'subito', 'lunedì mattina', 'dopo check manuale')",
-  "suggestedChannel": "email|whatsapp|telefono"
+  "suggestedChannel": "email|whatsapp|telefono",
+  "recommendedAction": "send_now|review_manually|do_not_contact"
 }
 
 Criteri priorità:
 - alta: sito lento/vecchio/non mobile, no e-commerce ma lo vendono fisicamente, no gestionale evidente, score ≥ 65
 - media: qualche criticità ma meno urgente, score 40-64
 - bassa: poche opportunità, score < 40
-- scartare: già ottimizzati digitalmente, enterprise, competitors diretti`,
+- scartare: già ottimizzati digitalmente, enterprise, competitors diretti
+
+Regole per recommendedAction:
+- send_now: usa questo valore solo se il lead e' una PMI davvero interessante, il problema e' chiaro, il servizio Bitora e' evidente e il canale migliore e' email
+- review_manually: usa questo valore se il lead ha potenziale ma il caso e' ambiguo, se preferisci WhatsApp o telefono, o se serve una verifica umana
+- do_not_contact: usa questo valore se il lead va scartato o non e' una buona opportunita'
+
+Se suggestedChannel non e' email, recommendedAction non deve mai essere send_now.
+Se il lead sembra gia' ben digitalizzato, recommendedAction deve essere do_not_contact.`,
 
   prompt_email: `Sei Denis, titolare di Bitora (bitora.it) — agenzia di sistemi digitali su misura con sede a Carmagnola (TO). Scrivi una cold email personalizzata a un potenziale cliente italiano.
 

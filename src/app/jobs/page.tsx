@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { Moon, Sun, MapPin, Play, Loader2, CheckCircle2, XCircle, Terminal } from "lucide-react";
+import { MapPin, Play, Loader2, CheckCircle2, XCircle, Terminal } from "lucide-react";
 
 interface JobConfig {
   id: string;
@@ -15,23 +16,16 @@ interface JobConfig {
 
 const JOBS: JobConfig[] = [
   {
-    id: "daily",
-    label: "Cron Notturno",
-    description: "Scraping lead per tutte le campagne attive → analisi siti → generazione bozze email e WhatsApp. Salta i lead già analizzati.",
-    icon: Moon,
-    color: "indigo",
-  },
-  {
-    id: "morning",
-    label: "Cron Mattutino",
-    description: "Invia email automaticamente ai lead con score sopra la soglia, rispettando il cap giornaliero e il toggle auto_send_enabled.",
-    icon: Sun,
-    color: "amber",
+    id: "continuous",
+    label: "Automazione Completa",
+    description: "Crea automaticamente la prossima campagna AI per i settori configurati, avvia Ricerca Clienti, Analisi Clienti e Invio Mail in sequenza.",
+    icon: Play,
+    color: "emerald",
   },
   {
     id: "suggest-cities",
     label: "Suggerisci Nuove Città",
-    description: "Analizza le città già lavorate e propone le 5 più redditizie per il settore scelto. Crea automaticamente le campagne ad alta priorità.",
+    description: "Analizza lo storico città e propone la prossima zona più promettente per il settore scelto. Serve come debug del motore AI che alimenta il loop continuo.",
     icon: MapPin,
     color: "emerald",
     extraFields: [
@@ -145,7 +139,7 @@ export default function JobsPage() {
         <h1 className="text-2xl sm:text-3xl font-bold">Esecuzione Job</h1>
       </div>
       <p className="text-sm text-[var(--muted-foreground)] mb-8">
-        Lancia manualmente i job automatici. I cron girano normalmente di notte (02:00) e mattina (09:00).
+        Lancia manualmente il motore automatico. In produzione va schedulata solo l&apos;Automazione Completa: crea campagne AI, esegue Ricerca Clienti, Analisi Clienti e Invio Mail.
       </p>
 
       <div className="grid gap-6 max-w-3xl">
@@ -238,14 +232,11 @@ export default function JobsPage() {
 
       {/* Info card */}
       <div className="mt-8 max-w-3xl bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
-        <h3 className="text-sm font-semibold mb-3">Configurazione Cron Automatico</h3>
+        <h3 className="text-sm font-semibold mb-3">Uso corretto di questa pagina</h3>
         <div className="space-y-2 text-sm text-[var(--muted-foreground)]">
-          <p>Per automatizzare usare <strong className="text-[var(--foreground)]">cron-job.org</strong> (free fino a 5 job):</p>
-          <ul className="list-disc list-inside space-y-1 ml-1">
-            <li>Job 1 — <span className="font-mono text-xs bg-[var(--muted)] px-1.5 py-0.5 rounded">POST /api/cron/daily</span> — ore 02:00 ogni notte</li>
-            <li>Job 2 — <span className="font-mono text-xs bg-[var(--muted)] px-1.5 py-0.5 rounded">POST /api/cron/morning</span> — ore 09:00 ogni mattino (lun–ven)</li>
-          </ul>
-          <p className="mt-2">Aggiungere header <span className="font-mono text-xs bg-[var(--muted)] px-1.5 py-0.5 rounded">x-cron-secret: [CRON_SECRET]</span> in ogni job.</p>
+          <p>Questa pagina serve solo per trigger manuali e debug operativo.</p>
+          <p>La configurazione dei cron automatici resta centralizzata in <Link href="/settings" className="text-[var(--foreground)] underline">Impostazioni → Automazione</Link>, così non hai istruzioni duplicate in due posti diversi.</p>
+          <p>Flusso consigliato: usa <strong>Automazione Completa</strong> per il ciclo completo; Ricerca Clienti, Analisi Clienti e Invio Mail restano worker interni.</p>
         </div>
       </div>
     </div>
