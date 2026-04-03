@@ -29,8 +29,23 @@ async function handler(request: NextRequest) {
   // Auth check — skip if no CRON_SECRET configured
   const secret = request.headers.get("x-cron-secret");
   const envSecret = process.env.CRON_SECRET;
+  const mask = (s: string | null | undefined) =>
+    s ? `${s.slice(0, 3)}***${s.slice(-2)} (len=${s.length})` : "(not set)";
+  console.log(`[cron/daily] method=${request.method}`);
+  console.log(`[cron/daily] x-cron-secret received: ${mask(secret)}`);
+  console.log(`[cron/daily] CRON_SECRET env:         ${mask(envSecret)}`);
   if (envSecret && secret !== envSecret) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    console.error(`[cron/daily] AUTH FAILED — header=${mask(secret)} env=${mask(envSecret)}`);
+    return NextResponse.json({
+      error: "Unauthorized",
+      _debug: {
+        headerReceived: !!secret,
+        envSecretSet: !!envSecret,
+        lengthMatch: secret?.length === envSecret?.length,
+        headerLen: secret?.length ?? 0,
+        envLen: envSecret?.length ?? 0,
+      },
+    }, { status: 403 });
   }
 
   // Pre-load custom prompts

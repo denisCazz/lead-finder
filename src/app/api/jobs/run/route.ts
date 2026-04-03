@@ -26,18 +26,45 @@ export async function POST(request: NextRequest) {
 
   const secret = process.env.CRON_SECRET || "";
   // Always call localhost directly — bypass Traefik/nginx which can strip custom headers
-  const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
+  const port = process.env.PORT || 3000;
+  const baseUrl = `http://localhost:${port}`;
   const url = `${baseUrl}${JOB_MAP[job]}`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(secret ? { "x-cron-secret": secret } : {}),
-    },
-    body: params ? JSON.stringify(params) : undefined,
-  });
+  const mask = (s: string) => s ? `${s.slice(0, 3)}***${s.slice(-2)} (len=${s.length})` : "(empty)";
+  console.log(`[jobs/run] → ${url}`);
+  console.log(`[jobs/run] CRON_SECRET: ${mask(secret)}`);
+  console.log(`[jobs/run] header sent: x-cron-secret=${mask(secret)}`);
 
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(secret ? { "x-cron-secret": secret } : {}),
+      },
+      body: params ? JSON.stringify(params) : undefined,
+    });
+  } catch (fetchErr) {
+    const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+    console.error(`[jobs/run] fetch failed: ${msg}`);
+    return NextResponse.json({
+      error: "Internal fetch failed",
+      detail: msg,
+      _debug: { url, port, secretSet: !!secret },
+    }, { status: 502 });
+  }
+
+  console.log(`[jobs/run] response status: ${response.status}`);
   const data = await response.json().catch(() => ({ error: "Non-JSON response from job" }));
+
+  // Attach debug metadata when it fails so the UI shows the root cause
+  if (!response.ok) {
+    return NextResponse.json({
+      ...data,
+      _debug: { url, port, secretSet: !!secret, responseStatus: response.status },
+    }, { status: response.status });
+  }
+
   return NextResponse.json(data, { status: response.status });
 }
