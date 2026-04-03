@@ -165,42 +165,44 @@ export default function LeadDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Contact Info */}
-        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
-          <h2 className="text-lg font-semibold mb-4">Contatti</h2>
-          <div className="space-y-3 text-sm">
-            {lead.contactName && (
-              <div><span className="text-[var(--muted-foreground)]">Referente:</span> {lead.contactName}</div>
-            )}
-            {lead.email && (
-              <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-[var(--muted-foreground)]" />
-                <a href={`mailto:${lead.email}`} className="text-[var(--primary)] hover:underline">{lead.email}</a>
-              </div>
-            )}
-            {lead.phone && (
-              <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-[var(--muted-foreground)]" />
-                <a href={`tel:${lead.phone}`} className="text-[var(--primary)] hover:underline">{lead.phone}</a>
-              </div>
-            )}
-            {lead.website && (
-              <div className="flex items-center gap-2">
-                <ExternalLink className="w-4 h-4 text-[var(--muted-foreground)]" />
-                <a href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="text-[var(--primary)] hover:underline truncate">
-                  {lead.website}
-                </a>
-              </div>
-            )}
-            {lead.address && (
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[var(--muted-foreground)]" />
-                <span>{lead.address}</span>
-              </div>
-            )}
-            {lead.rating && (
-              <div><span className="text-[var(--muted-foreground)]">Rating:</span> {lead.rating}/5</div>
-            )}
+        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6 flex flex-col justify-between">
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Contatti</h2>
+            <div className="space-y-3 text-sm">
+              {lead.contactName && (
+                <div><span className="text-[var(--muted-foreground)] mr-1">Referente:</span> <span className="break-words">{lead.contactName}</span></div>
+              )}
+              {lead.email && (
+                <div className="flex items-start gap-2">
+                  <Mail className="w-4 h-4 text-[var(--muted-foreground)] shrink-0 mt-0.5" />
+                  <a href={`mailto:${lead.email}`} className="text-[var(--primary)] hover:underline break-all">{lead.email}</a>
+                </div>
+              )}
+              {lead.phone && (
+                <div className="flex items-start gap-2">
+                  <Phone className="w-4 h-4 text-[var(--muted-foreground)] shrink-0 mt-0.5" />
+                  <a href={`tel:${lead.phone}`} className="text-[var(--primary)] hover:underline">{lead.phone}</a>
+                </div>
+              )}
+              {lead.website && (
+                <div className="flex items-start gap-2">
+                  <ExternalLink className="w-4 h-4 text-[var(--muted-foreground)] shrink-0 mt-0.5" />
+                  <a href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="text-[var(--primary)] hover:underline break-all">
+                    {lead.website}
+                  </a>
+                </div>
+              )}
+              {lead.address && (
+                <div className="flex items-start gap-2">
+                  <MapPin className="w-4 h-4 text-[var(--muted-foreground)] shrink-0 mt-0.5" />
+                  <span className="break-words">{lead.address}</span>
+                </div>
+              )}
+            </div>
           </div>
+          {lead.rating && (
+            <div className="mt-4 pt-4 border-t border-[var(--border)]"><span className="text-[var(--muted-foreground)]">Rating Maps:</span> <strong>{lead.rating}/5</strong></div>
+          )}
         </div>
 
         {/* Analysis */}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { BackfillButton } from "@/components/BackfillButton";
 import {
   ArrowRight,
   BarChart3,
@@ -92,7 +93,7 @@ async function getDashboardData() {
     const week = new Date(today);
     week.setDate(week.getDate() - 7);
 
-    const [settingsRows, counts, campaigns, logs, topLeads, outreachPreview, cityLogs, tokenLogs] = await Promise.all([
+    const [settingsRows, counts, campaigns, logs, topLeads, outreachPreview, cityLogs, tokenLogs, lastBackfill] = await Promise.all([
       prisma.setting.findMany({
         where: {
           key: { in: ["auto_send_enabled", "auto_send_min_score", "max_emails_per_day", "app_url", "email_from"] },
@@ -173,6 +174,11 @@ async function getDashboardData() {
         },
         select: { metadata: true },
       }),
+      prisma.activityLog.findFirst({
+        where: { type: "backfill" },
+        orderBy: { createdAt: "desc" },
+        select: { message: true, createdAt: true }
+      }),
     ]);
 
     const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
@@ -201,6 +207,7 @@ async function getDashboardData() {
 
     return {
       dbConnected: true,
+      lastBackfill,
       settings: {
         autoSendEnabled: settings.auto_send_enabled !== "false",
         minScore: parseInt(settings.auto_send_min_score || "70", 10),
@@ -213,6 +220,7 @@ async function getDashboardData() {
         analyzedLeads,
         hotLeadCount,
         pendingAnalysisCount,
+        backlogCount,
         draftEmailCount,
         sentTodayCount,
         failedEmailCount,
@@ -229,6 +237,7 @@ async function getDashboardData() {
   } catch {
     return {
       dbConnected: false,
+      lastBackfill: null,
       settings: { autoSendEnabled: false, minScore: 70, maxEmailsPerDay: 20, emailFrom: "info@bitora.it" },
       metrics: {
         totalLeads: 0,
@@ -256,7 +265,7 @@ async function getDashboardData() {
 function SectionCard({ title, description, action, children }: { title: string; description?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 sm:p-6">
-      <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-[var(--foreground)]">{title}</h2>
           {description && <p className="mt-1 text-sm text-[var(--muted-foreground)]">{description}</p>}
@@ -314,33 +323,33 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.18),_transparent_28%),linear-gradient(180deg,_rgba(15,23,42,0.92),_rgba(15,23,42,0.98))] p-6 sm:p-8">
-        <div className="grid gap-6 xl:grid-cols-[1.35fr_0.9fr] xl:items-stretch">
+      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.18),_transparent_28%),linear-gradient(180deg,_rgba(15,23,42,0.92),_rgba(15,23,42,0.98))] p-4 sm:p-6 lg:p-8">
+        <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
           <div className="max-w-3xl">
             <div className="mb-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-sky-200/80">
               <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1">Centro Operativo</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">Bitora.it</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">{formatDate(new Date())}</span>
+              <span className="hidden sm:inline rounded-full border border-white/10 bg-white/5 px-3 py-1">Bitora.it</span>
+              <span className="hidden sm:inline rounded-full border border-white/10 bg-white/5 px-3 py-1">{formatDate(new Date())}</span>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Dashboard unificata lead, AI, outreach e automazioni</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">Stato reale della pipeline: cosa e' stato trovato, cosa e' stato analizzato, cosa e' pronto da inviare e dove serve ancora intervento manuale.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-4xl text-balance">Dashboard unificata lead, AI, outreach e automazioni</h1>
+            <p className="mt-2 sm:mt-3 max-w-2xl text-sm leading-6 text-slate-300 text-balance">Stato reale della pipeline: cosa e&apos; stato trovato, analizzato, pronto da inviare e dove serve intervento manuale.</p>
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/settings" className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-900 transition hover:bg-slate-100">
-                <Settings className="h-4 w-4" />
-                Impostazioni
+            <div className="mt-4 sm:mt-6 flex flex-row flex-wrap gap-2">
+              <Link href="/settings" className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-100">
+                <Settings className="h-4 w-4 shrink-0" />
+                <span>Impostazioni</span>
               </Link>
-              <Link href="/jobs" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/10">
-                <Terminal className="h-4 w-4" />
-                Lancia job
+              <Link href="/jobs" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
+                <Terminal className="h-4 w-4 shrink-0" />
+                <span>Lancia job</span>
               </Link>
-              <Link href="/logs" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/10">
-                <ScrollText className="h-4 w-4" />
-                Apri log
+              <Link href="/logs" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
+                <ScrollText className="h-4 w-4 shrink-0" />
+                <span>Apri log</span>
               </Link>
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-4 sm:mt-6 grid gap-3 grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-xs text-slate-400">Campagne attive</p>
                 <p className="mt-1 text-2xl font-semibold text-white">{activeCampaigns}</p>
@@ -359,33 +368,33 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-4">
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Automazione</p>
-                <h2 className="mt-2 text-xl font-semibold text-white">Stato operativo</h2>
+                <h2 className="mt-1 text-lg font-semibold text-white">Stato operativo</h2>
               </div>
-              <Link href="/settings" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10">
-                <Settings className="h-4 w-4" />
+              <Link href="/settings" className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs text-white transition hover:bg-white/10 shrink-0">
+                <Settings className="h-3.5 w-3.5" />
                 Settings
               </Link>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="space-y-2">
               {[
-                { label: "Ricerca clienti", value: "worker interno", state: "trova nuovi lead e aggiorna lo storico citta'", ok: true },
-                { label: "Analisi clienti", value: "AI attiva", state: "diagnosi, qualifica e decisione invio per lead", ok: true },
-                { label: "Invio mail", value: data.settings.autoSendEnabled ? "attivo" : "forzato dal loop", state: `cap debug ${data.settings.maxEmailsPerDay}/giorno`, ok: true },
-                { label: "Mittente", value: data.settings.emailFrom, state: "configurazione attiva", ok: true },
+                { label: "Ricerca clienti", value: "worker interno", state: "trova nuovi lead", ok: true },
+                { label: "Analisi clienti", value: "AI attiva", state: "diagnosi + decisione invio", ok: true },
+                { label: "Invio mail", value: data.settings.autoSendEnabled ? "attivo" : "forzato", state: `cap ${data.settings.maxEmailsPerDay}/giorno`, ok: true },
+                { label: "Mittente", value: data.settings.emailFrom, state: "config attiva", ok: true },
               ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-slate-300">{item.label}</p>
-                    <p className="mt-1 truncate text-xs text-slate-400">{item.state}</p>
+                <div key={item.label} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-slate-300 font-medium leading-none">{item.label}</p>
+                    <p className="mt-1 text-xs text-slate-500 truncate">{item.state}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-white">{item.value}</p>
-                    <p className={`mt-1 text-xs ${item.ok ? "text-emerald-300" : "text-amber-300"}`}>{item.ok ? "ok" : "attenzione"}</p>
+                  <div className="text-right shrink-0 max-w-[40%]">
+                    <p className="text-xs font-semibold text-white truncate">{item.value}</p>
+                    <p className={`mt-0.5 text-xs ${item.ok ? "text-emerald-400" : "text-amber-400"}`}>{item.ok ? "ok" : "attenzione"}</p>
                   </div>
                 </div>
               ))}
@@ -394,44 +403,44 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         {primaryCards.map((card) => (
-          <div key={card.label} className={`rounded-2xl border p-5 ${card.tone}`}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">{card.label}</p>
-                <p className="mt-2 text-3xl font-bold text-white">{card.value}</p>
-                <p className="mt-1 text-xs text-current/80">{card.detail}</p>
+          <div key={card.label} className={`rounded-2xl border p-3 sm:p-4 ${card.tone}`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-medium leading-none truncate">{card.label}</p>
+                <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{card.value}</p>
+                <p className="mt-1 text-xs text-current/80 truncate">{card.detail}</p>
               </div>
-              <card.icon className="h-8 w-8 shrink-0 opacity-80" />
+              <card.icon className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 opacity-70 mt-0.5" />
             </div>
           </div>
         ))}
-        <div className={`rounded-2xl border p-5 ${data.metrics.errorCount > 0 ? "text-red-300 bg-red-500/10 border-red-500/20" : "text-slate-300 bg-slate-500/10 border-slate-500/20"}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">Errori Oggi</p>
-              <p className="mt-2 text-3xl font-bold text-white">{data.metrics.errorCount}</p>
-              <p className="mt-1 text-xs text-current/80">{data.metrics.failedEmailCount} invii falliti</p>
+        <div className={`rounded-2xl border p-3 sm:p-4 ${data.metrics.errorCount > 0 ? "text-red-300 bg-red-500/10 border-red-500/20" : "text-slate-300 bg-slate-500/10 border-slate-500/20"}`}>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium leading-none">Errori Oggi</p>
+              <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{data.metrics.errorCount}</p>
+              <p className="mt-1 text-xs text-current/80">{data.metrics.failedEmailCount} falliti</p>
             </div>
-            <Radar className="h-8 w-8 shrink-0 opacity-80" />
+            <Radar className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 opacity-70 mt-0.5" />
           </div>
         </div>
-        <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-5 text-fuchsia-300">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">Token 7 Giorni</p>
-              <p className="mt-2 text-3xl font-bold text-white">{data.metrics.weeklyTokens.toLocaleString("it-IT")}</p>
-              <p className="mt-1 text-xs text-current/80">consumo AI monitorato</p>
+        <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-3 sm:p-4 text-fuchsia-300">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium leading-none">Token 7g</p>
+              <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{data.metrics.weeklyTokens > 999 ? `${(data.metrics.weeklyTokens/1000).toFixed(1)}k` : data.metrics.weeklyTokens}</p>
+              <p className="mt-1 text-xs text-current/80">consumo AI</p>
             </div>
-            <Bot className="h-8 w-8 shrink-0 opacity-80" />
+            <Bot className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 opacity-70 mt-0.5" />
           </div>
         </div>
       </section>
 
       <section className="space-y-6">
         <SectionCard title="Pipeline operativa" description="Conversione dal lead trovato all'invio o al passaggio in outreach manuale." action={<Link href="/usage" className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"><BarChart3 className="h-4 w-4" />Utilizzo AI</Link>}>
-          <div className="mb-5 grid gap-3 lg:grid-cols-4">
+          <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/25 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Analisi AI</p>
               <p className="mt-2 text-2xl font-semibold">{data.metrics.analyzedLeads}</p>
@@ -472,36 +481,18 @@ export default async function DashboardPage() {
         </SectionCard>
           <SectionCard title="Comandi e pagine chiave" description="Azioni principali e accessi rapidi raccolti in un unico pannello.">
             <div className="mb-5 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Configurazione sistema</p>
-                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">Gestisci automazioni, soglie, webhook e parametri del loop continuo.</p>
-                  </div>
-                  <Link href="/settings" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)] transition hover:opacity-90">
-                    <Settings className="h-4 w-4" />
-                    Apri Settings
-                  </Link>
+              <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4 flex flex-col justify-between">
+                <div>
+                  <p className="text-sm font-medium">Configurazione sistema</p>
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">Gestisci automazioni, soglie, webhook e parametri del loop continuo.</p>
                 </div>
+                <Link href="/settings" className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)] transition hover:opacity-90">
+                  <Settings className="h-4 w-4" />
+                  Apri Settings
+                </Link>
               </div>
 
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4">
-                <p className="text-sm font-medium">Azioni rapide</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                  <Link href="/jobs" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-sm font-medium transition hover:border-[var(--primary)]/40 hover:text-[var(--primary)]">
-                    <Terminal className="h-4 w-4" />
-                    Jobs
-                  </Link>
-                  <Link href="/logs" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-sm font-medium transition hover:border-[var(--primary)]/40 hover:text-[var(--primary)]">
-                    <ScrollText className="h-4 w-4" />
-                    Log
-                  </Link>
-                  <Link href="/usage" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-sm font-medium transition hover:border-[var(--primary)]/40 hover:text-[var(--primary)]">
-                    <BarChart3 className="h-4 w-4" />
-                    Utilizzo AI
-                  </Link>
-                </div>
-              </div>
+              <BackfillButton lastLog={data.lastBackfill} />
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

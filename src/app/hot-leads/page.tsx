@@ -165,110 +165,104 @@ export default function HotLeadsPage() {
         ))}
       </div>
 
-      {/* Table */}
+      {/* Table / Mobile Cards */}
       {loading ? (
         <div className="text-center py-20 text-[var(--muted-foreground)]">Caricamento...</div>
       ) : leads.length === 0 ? (
-        <div className="text-center py-20 text-[var(--muted-foreground)]">
+        <div className="text-center py-20 bg-[var(--card)] rounded-xl border border-[var(--border)] text-[var(--muted-foreground)]">
           <Flame className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p>Nessun lead con score ≥ {minScore}</p>
           <p className="text-sm mt-1">Lancia un job di analisi dalla pagina Jobs</p>
         </div>
       ) : (
-        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
-                  <th className="text-left px-4 py-3 font-medium">Azienda</th>
-                  <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Settore / Città</th>
-                  <th className="text-center px-4 py-3 font-medium">Score</th>
-                  <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Servizio</th>
-                  <th className="text-left px-4 py-3 font-medium">Contatto</th>
-                  <th className="text-left px-4 py-3 font-medium">Stato email</th>
-                  <th className="text-center px-4 py-3 font-medium">Azioni</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead, i) => (
-                  <tr
-                    key={lead.id}
-                    className={`border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)]/30 transition-colors ${
-                      i === 0 && lead.score >= 85 ? "bg-orange-500/5" : ""
-                    }`}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-[var(--foreground)]">{lead.companyName}</div>
-                      {lead.issues.length > 0 && (
-                        <div className="text-xs text-[var(--muted-foreground)] mt-0.5 max-w-[220px] truncate">
-                          {lead.issues[0]}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell text-[var(--muted-foreground)]">
-                      <div>{lead.sector || "—"}</div>
-                      <div className="text-xs">{[lead.city, lead.region].filter(Boolean).join(", ") || "—"}</div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex flex-col items-center gap-1">
+        <>
+          {/* Mobile view */}
+          <div className="md:hidden space-y-4">
+            {leads.map((lead) => (
+              <div key={lead.id} className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 flex flex-col gap-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-[var(--foreground)] truncate">{lead.companyName}</div>
+                    <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{[lead.sector, lead.city].filter(Boolean).join(" • ")}</div>
+                  </div>
+                  <ScoreBadge score={lead.score} />
+                </div>
+                
+                <div className="flex flex-col gap-1.5 text-sm bg-[var(--muted)]/30 rounded-lg p-3">
+                  {lead.email && <div className="truncate text-xs">✉️ <a href={`mailto:${lead.email}`} className="text-[var(--primary)] truncate">{lead.email}</a></div>}
+                  {lead.phone && <div className="truncate text-xs">📞 <a href={`tel:${lead.phone}`} className="text-[var(--primary)]">{lead.phone}</a></div>}
+                </div>
+
+                <div className="flex items-center justify-between border-t border-[var(--border)] pt-3 mt-1">
+                  <MessageStatus lead={lead} />
+                  <Link href={`/leads/${lead.id}`} className="text-xs font-medium text-[var(--primary)] py-1.5 px-3 bg-[var(--primary)]/10 rounded-md hover:bg-[var(--primary)]/20 transition-colors">
+                    Apri Scheda
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop view */}
+          <div className="hidden md:block bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)] bg-[var(--muted)]/20">
+                    <th className="text-left px-5 py-4 font-medium whitespace-nowrap">Azienda</th>
+                    <th className="text-left px-5 py-4 font-medium hidden sm:table-cell whitespace-nowrap">Settore / Città</th>
+                    <th className="text-center px-5 py-4 font-medium whitespace-nowrap">Score</th>
+                    <th className="text-left px-5 py-4 font-medium hidden lg:table-cell whitespace-nowrap">Servizio</th>
+                    <th className="text-left px-5 py-4 font-medium whitespace-nowrap">Contatto</th>
+                    <th className="text-left px-5 py-4 font-medium whitespace-nowrap">Stato email</th>
+                    <th className="text-center px-5 py-4 font-medium">Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leads.map((lead, i) => (
+                    <tr
+                      key={lead.id}
+                      className={`border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)]/50 transition-colors ${
+                        i === 0 && lead.score >= 85 ? "bg-orange-500/5" : ""
+                      }`}
+                    >
+                      <td className="px-5 py-4 max-w-[200px]">
+                        <div className="font-medium text-[var(--foreground)] truncate">{lead.companyName}</div>
+                      </td>
+                      <td className="px-5 py-4 hidden sm:table-cell text-[var(--muted-foreground)] truncate max-w-[180px]">
+                        {[lead.sector, lead.city].filter(Boolean).join(" • ")}
+                      </td>
+                      <td className="px-5 py-4 text-center">
                         <ScoreBadge score={lead.score} />
-                        {lead.aiScore !== null && (
-                          <span className="text-xs text-[var(--muted-foreground)]">AI: {lead.aiScore}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell text-[var(--muted-foreground)] text-xs max-w-[180px]">
-                      {lead.suggestedService || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1">
-                        {lead.email && (
-                          <div className="flex items-center gap-1 text-xs text-[var(--foreground)]">
-                            <Mail className="w-3 h-3 text-[var(--primary)]" />
-                            <span className="truncate max-w-[140px]">{lead.email}</span>
-                          </div>
-                        )}
-                        {lead.phone && (
-                          <div className="flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
-                            <Phone className="w-3 h-3" />
-                            <span>{lead.phone}</span>
-                          </div>
-                        )}
-                        {!lead.email && !lead.phone && (
-                          <span className="text-xs text-[var(--muted-foreground)]">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <MessageStatus lead={lead} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
+                      </td>
+                      <td className="px-5 py-4 hidden lg:table-cell text-[var(--muted-foreground)] text-xs truncate max-w-[150px]">
+                        {lead.suggestedService || "Da analizzare"}
+                      </td>
+                      <td className="px-5 py-4 min-w-[180px]">
+                        <div className="space-y-1 text-[13px]">
+                          {lead.email && <a href={`mailto:${lead.email}`} className="text-[var(--primary)] hover:underline truncate block max-w-[200px]">✉️ {lead.email}</a>}
+                          {lead.phone && <a href={`tel:${lead.phone}`} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] block">📞 {lead.phone}</a>}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 min-w-[150px]">
+                        <MessageStatus lead={lead} />
+                      </td>
+                      <td className="px-5 py-4 text-center">
                         <Link
                           href={`/leads/${lead.id}`}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 border border-[var(--primary)]/20 transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--muted)] hover:bg-[var(--primary)] text-[var(--foreground)] hover:text-[var(--primary-foreground)] rounded-md transition-colors text-xs font-medium whitespace-nowrap"
                         >
-                          Dettaglio
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Apri
                         </Link>
-                        {lead.website && (
-                          <a
-                            href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
-                            title="Apri sito"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Pagination */}
