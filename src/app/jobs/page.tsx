@@ -23,6 +23,13 @@ const JOBS: JobConfig[] = [
     color: "emerald",
   },
   {
+    id: "backfill",
+    label: "Smaltisci Arretrato Lead",
+    description: "Processa tutta la coda storica: cerca email dai siti, analizza i lead senza analisi, genera i testi mancanti e invia subito le email che l'AI approva.",
+    icon: Terminal,
+    color: "indigo",
+  },
+  {
     id: "suggest-cities",
     label: "Suggerisci Nuove Città",
     description: "Analizza lo storico città e propone la prossima zona più promettente per il settore scelto. Serve come debug del motore AI che alimenta il loop continuo.",
@@ -142,7 +149,7 @@ export default function JobsPage() {
         Lancia manualmente il motore automatico. In produzione va schedulata solo l&apos;Automazione Completa: crea campagne AI, esegue Ricerca Clienti, Analisi Clienti e Invio Mail.
       </p>
 
-      <div className="grid gap-6 max-w-3xl">
+      <div className="grid max-w-6xl gap-6 xl:grid-cols-2">
         {JOBS.map((job) => {
           const state = states[job.id];
           const Icon = job.icon;
@@ -231,12 +238,12 @@ export default function JobsPage() {
       </div>
 
       {/* Info card */}
-      <div className="mt-8 max-w-3xl bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+      <div className="mt-8 max-w-6xl bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
         <h3 className="text-sm font-semibold mb-3">Uso corretto di questa pagina</h3>
         <div className="space-y-2 text-sm text-[var(--muted-foreground)]">
           <p>Questa pagina serve solo per trigger manuali e debug operativo.</p>
           <p>La configurazione dei cron automatici resta centralizzata in <Link href="/settings" className="text-[var(--foreground)] underline">Impostazioni → Automazione</Link>, così non hai istruzioni duplicate in due posti diversi.</p>
-          <p>Flusso consigliato: usa <strong>Automazione Completa</strong> per il ciclo completo; Ricerca Clienti, Analisi Clienti e Invio Mail restano worker interni.</p>
+          <p>Flusso consigliato: usa <strong>Automazione Completa</strong> per il ciclo completo e <strong>Smaltisci Arretrato Lead</strong> quando devi recuperare la coda storica rimasta indietro.</p>
         </div>
       </div>
     </div>

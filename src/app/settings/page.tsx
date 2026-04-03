@@ -137,10 +137,10 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6 max-w-6xl">
         {/* ═══ TAB: GENERALE ═══ */}
         {activeTab === "general" && (
-          <>
+          <div className="stack-grid lg:grid-cols-2">
             {/* Email config */}
             <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
               <h2 className="text-lg font-semibold mb-4">Configurazione Email</h2>
@@ -211,12 +211,12 @@ export default function SettingsPage() {
               </div>
               {importResult && <p className="text-sm mt-2 text-green-400">{importResult}</p>}
             </div>
-          </>
+          </div>
         )}
 
         {/* ═══ TAB: PROMPT AI ═══ */}
         {activeTab === "prompts" && (
-          <>
+          <div className="stack-grid xl:grid-cols-2">
             <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-xl p-4">
               <p className="text-sm text-yellow-200">
                 Personalizza i prompt usati dall&apos;AI per generare email, analizzare siti e pianificare campagne.
@@ -249,12 +249,12 @@ export default function SettingsPage() {
                 </p>
               </div>
             ))}
-          </>
+          </div>
         )}
 
         {/* ═══ TAB: AUTOMAZIONE ═══ */}
         {activeTab === "automation" && (
-          <>
+          <div className="space-y-6">
             {/* ── Loop Continuo ── */}
             <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
               <div className="flex items-center justify-between mb-2 gap-4">
@@ -383,11 +383,12 @@ export default function SettingsPage() {
                 <li>Job consigliato unico: <strong>Automazione Completa</strong> → URL <code className="bg-[var(--muted)] px-1 rounded">/api/cron/continuous</code>, schedule suggerito <code className="bg-[var(--muted)] px-1 rounded">5 * * * *</code></li>
                 <li>Imposta <code className="bg-[var(--muted)] px-1 rounded">automation_interval_minutes</code> per non farlo girare troppo spesso. Se viene chiamato prima, si auto-salta.</li>
                 <li>Non schedulare i worker interni <code className="bg-[var(--muted)] px-1 rounded">/api/cron/daily</code> e <code className="bg-[var(--muted)] px-1 rounded">/api/cron/morning</code>: corrispondono a <strong>Ricerca Clienti + Analisi Clienti</strong> e <strong>Invio Mail</strong> e vengono usati solo dall&apos;Automazione Completa.</li>
+                <li>Usa <strong>Smaltisci Arretrato Lead</strong> solo dalla pagina Jobs quando devi recuperare i lead storici: non va schedulato.</li>
                 <li>Per il job continuo: Advanced → Request headers → aggiungi <code className="bg-[var(--muted)] px-1 rounded">x-cron-secret: [CRON_SECRET]</code></li>
                 <li>Testa prima dalla pagina <a href="/jobs" className="text-blue-400 underline">Jobs</a>, poi controlla gli esiti in <a href="/logs" className="text-blue-400 underline">Log</a>.</li>
               </ol>
             </div>
-          </>
+          </div>
         )}
 
         {/* Save button (always visible) */}

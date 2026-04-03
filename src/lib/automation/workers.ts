@@ -18,6 +18,7 @@ import { scrapeGoogleMaps } from "@/lib/scrapers/google-maps";
 import { scrapePagineGialle } from "@/lib/scrapers/pagine-gialle";
 import { notifyDailySummary, notifyLeadBatch, TelegramLeadSummary } from "@/lib/telegram";
 import { extractDomain } from "@/lib/utils";
+import * as cheerio from "cheerio";
 
 export type DailyWorkerInput = {
   campaignIds?: number[];
@@ -57,6 +58,149 @@ export type MorningWorkerResult = {
   skipped?: true;
   reason?: string;
 };
+
+export type BackfillWorkerResult = {
+  pendingBefore: number;
+  pendingAfter: number;
+  emailEnriched: number;
+  analyzed: number;
+  diagnosed: number;
+  generated: number;
+  readyToSend: number;
+  manualReview: number;
+  rejected: number;
+  messagesSent: number;
+  sendFailed: number;
+  totalTokens: number;
+  errors: string[];
+};
+
+const WORKER_BATCH_SIZE = 50;
+const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+function normalizeEmail(email: string): string | null {
+  const normalized = email
+    .trim()
+    .toLowerCase()
+    .replace(/^mailto:/, "")
+    .replace(/[)>.,;:]+$/g, "");
+
+  if (!normalized || !normalized.includes("@")) return null;
+  if (normalized.includes("example.com")) return null;
+  if (/["'\s]/.test(normalized)) return null;
+  return normalized;
+}
+
+function rankEmail(email: string, website: string | null | undefined): number {
+  const domain = website ? extractDomain(website) : null;
+  const emailDomain = email.split("@")[1] || "";
+  let score = 0;
+
+  if (domain && emailDomain === domain) score += 4;
+  if (domain && emailDomain === `www.${domain}`) score += 3;
+  if (/^(info|hello|ciao|studio|amministrazione|commerciale|contatti)@/.test(email)) score += 2;
+  if (/^(noreply|no-reply|donotreply)@/.test(email)) score -= 5;
+  if (email.includes(".png") || email.includes(".jpg") || email.includes(".jpeg") || email.includes(".webp")) score -= 10;
+
+  return score;
+}
+
+async function fetchPage(url: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+    });
+
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function findLeadEmailFromWebsite(website: string): Promise<string | null> {
+  const domain = extractDomain(website);
+  if (!domain) return null;
+
+  const baseUrl = website.startsWith("http") ? website : `https://${website}`;
+  const visited = new Set<string>();
+  const queue = [baseUrl];
+  const found = new Set<string>();
+
+  while (queue.length > 0 && visited.size < 4) {
+    const currentUrl = queue.shift();
+    if (!currentUrl || visited.has(currentUrl)) continue;
+    visited.add(currentUrl);
+
+    const html = await fetchPage(currentUrl);
+    if (!html) continue;
+
+    for (const match of html.matchAll(EMAIL_REGEX)) {
+      const email = normalizeEmail(match[0]);
+      if (email) found.add(email);
+    }
+
+    const $ = cheerio.load(html);
+
+    $("a[href^='mailto:']").each((_, element) => {
+      const href = $(element).attr("href");
+      const email = normalizeEmail(href || "");
+      if (email) found.add(email);
+    });
+
+    $("a[href]").each((_, element) => {
+      if (queue.length + visited.size >= 6) return;
+
+      const href = $(element).attr("href");
+      if (!href) return;
+      const label = ($(element).text() || href).toLowerCase();
+      if (!/(contact|contatt|chi-siamo|about|studio|azienda|info)/.test(label)) return;
+
+      try {
+        const nextUrl = new URL(href, currentUrl);
+        if (nextUrl.hostname.replace(/^www\./, "") !== domain) return;
+        if (!visited.has(nextUrl.toString())) queue.push(nextUrl.toString());
+      } catch {
+        // Ignore malformed links.
+      }
+    });
+  }
+
+  const ranked = Array.from(found).sort((left, right) => rankEmail(right, website) - rankEmail(left, website));
+  return ranked[0] || null;
+}
+
+async function enrichLeadEmail(lead: { id: number; companyName: string; website: string | null; email: string | null; campaignId: number | null }) {
+  if (lead.email || !lead.website) return lead.email;
+
+  const discoveredEmail = await findLeadEmailFromWebsite(lead.website);
+  if (!discoveredEmail) return null;
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { email: discoveredEmail },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      leadId: lead.id,
+      campaignId: lead.campaignId,
+      type: "analyze",
+      message: `📬 Email trovata automaticamente per ${lead.companyName}: ${discoveredEmail}`,
+    },
+  });
+
+  return discoveredEmail;
+}
 
 export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}): Promise<DailyWorkerResult> {
   const hasCampaignFilter = Array.isArray(input.campaignIds);
@@ -130,6 +274,15 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
           scrapePagineGialle(campaign.sector, cityLabel, 10),
         ]);
 
+        if (gmLeads.status === "rejected") {
+          const message = gmLeads.reason instanceof Error ? gmLeads.reason.message : String(gmLeads.reason);
+          results.errors.push(`Google Maps ${campaign.name}: ${message}`);
+        }
+        if (pgLeads.status === "rejected") {
+          const message = pgLeads.reason instanceof Error ? pgLeads.reason.message : String(pgLeads.reason);
+          results.errors.push(`PagineGialle ${campaign.name}: ${message}`);
+        }
+
         const allLeads = [
           ...(gmLeads.status === "fulfilled" ? gmLeads.value : []),
           ...(pgLeads.status === "fulfilled" ? pgLeads.value : []),
@@ -190,7 +343,16 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
         }
 
         await prisma.activityLog.create({
-          data: { campaignId: campaign.id, type: "scrape_done", message: `✅ Ricerca clienti completata: ${newForCampaign} nuovi lead per "${query}"` },
+          data: {
+            campaignId: campaign.id,
+            type: "scrape_done",
+            message: `✅ Ricerca clienti completata: ${newForCampaign} nuovi lead per "${query}"`,
+            metadata: JSON.stringify({
+              googleMapsResults: gmLeads.status === "fulfilled" ? gmLeads.value.length : 0,
+              pagineGialleResults: pgLeads.status === "fulfilled" ? pgLeads.value.length : 0,
+              hadScraperErrors: gmLeads.status === "rejected" || pgLeads.status === "rejected",
+            }),
+          },
         });
 
         if (closeCampaigns) {
@@ -215,123 +377,193 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
 
     await flushLeadBatch();
 
-    const newLeads = await prisma.lead.findMany({
-      where: { website: { not: null }, analyses: { none: {} } },
-      take: 20,
-    });
+    const analysisWhere = {
+      analyses: { none: {} },
+      ...(hasCampaignFilter ? { campaignId: { in: targetCampaignIds } } : {}),
+    };
 
-    for (const lead of newLeads) {
-      try {
-        if (!lead.website) continue;
-        const fullUrl = lead.website.startsWith("http") ? lead.website : `https://${lead.website}`;
+    while (true) {
+      const pendingLeads = await prisma.lead.findMany({
+        where: analysisWhere,
+        orderBy: { createdAt: "asc" },
+        take: WORKER_BATCH_SIZE,
+      });
 
-        const [pageSpeed, htmlResult] = await Promise.allSettled([
-          analyzePageSpeed(fullUrl),
-          analyzeHtml(fullUrl),
-        ]);
+      if (pendingLeads.length === 0) break;
 
-        const ps = pageSpeed.status === "fulfilled" ? pageSpeed.value : null;
-        const html = htmlResult.status === "fulfilled" ? htmlResult.value : null;
-        const scoreResult = calculateScore(ps, html);
+      for (const lead of pendingLeads) {
+        try {
+          const leadEmail = await enrichLeadEmail(lead);
 
-        let aiDiagnosisJson: string | null = null;
-        let aiScore: number | null = null;
-        let aiTokens = 0;
-        let diagnosis: SiteDiagnosis | null = null;
-
-        if (html?.extractedText) {
-          try {
-            const diagResult = await diagnoseSiteWithAI({
-              companyName: lead.companyName,
-              sector: lead.sector,
-              website: lead.website,
-              pageTitle: html.pageTitle,
-              metaDescription: html.metaDescription,
-              extractedText: html.extractedText,
-              performanceScore: ps?.performanceScore ?? null,
-              hasEcommerce: html.hasEcommerce,
-              hasBooking: html.hasBooking,
-              isMobileFriendly: html.isMobileFriendly,
-              hasModernDesign: html.hasModernDesign,
-              hasCrm: html.hasCrm,
-              hasAnalytics: html.hasAnalytics,
-              hasSocialPresence: html.hasSocialPresence,
-              hasWhatsappWidget: html.hasWhatsappWidget,
-              hasContactForm: html.hasContactForm,
-              detectedTechs: html.detectedTechs,
+          if (!lead.website) {
+            await prisma.analysis.create({
+              data: {
+                leadId: lead.id,
+                performanceScore: null,
+                lcp: null,
+                fid: null,
+                cls: null,
+                isMobileFriendly: false,
+                hasEcommerce: false,
+                hasBooking: false,
+                hasCrm: false,
+                hasModernDesign: false,
+                issuesJson: JSON.stringify(["Nessun sito web disponibile per l'analisi automatica"]),
+                suggestedService: "Sito vetrina o landing page professionale",
+                aiDiagnosis: null,
+                aiScore: null,
+                aiTokensUsed: 0,
+              },
             });
 
-            aiDiagnosisJson = JSON.stringify(diagResult.data);
-            aiScore = diagResult.data.aiScore;
-            diagnosis = diagResult.data;
-            aiTokens = diagResult.tokensUsed;
-            results.totalTokens += diagResult.tokensUsed;
-            results.diagnosed++;
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: { score: leadEmail ? 35 : 20, status: "analyzed", email: leadEmail || lead.email },
+            });
 
             await prisma.activityLog.create({
               data: {
                 leadId: lead.id,
                 campaignId: lead.campaignId,
-                type: "ai_analysis",
-                message: `🧠 Diagnosi AI ${lead.companyName}: score ${aiScore}/100`,
-                metadata: JSON.stringify({
-                  tokensUsed: diagResult.tokensUsed,
-                  durationMs: diagResult.durationMs,
-                  confidence: diagResult.data.confidence,
-                }),
+                type: "analyze",
+                message: `🧾 Analisi ridotta completata per ${lead.companyName}: nessun sito disponibile`,
               },
             });
-          } catch {
-            // fallback to technical analysis only
+
+            results.analyzed++;
+            continue;
           }
+
+          const fullUrl = lead.website.startsWith("http") ? lead.website : `https://${lead.website}`;
+
+          const [pageSpeed, htmlResult] = await Promise.allSettled([
+            analyzePageSpeed(fullUrl),
+            analyzeHtml(fullUrl),
+          ]);
+
+          const ps = pageSpeed.status === "fulfilled" ? pageSpeed.value : null;
+          const html = htmlResult.status === "fulfilled" ? htmlResult.value : null;
+          const scoreResult = calculateScore(ps, html);
+
+          let aiDiagnosisJson: string | null = null;
+          let aiScore: number | null = null;
+          let aiTokens = 0;
+          let diagnosis: SiteDiagnosis | null = null;
+
+          if (html?.extractedText) {
+            try {
+              const diagResult = await diagnoseSiteWithAI({
+                companyName: lead.companyName,
+                sector: lead.sector,
+                website: lead.website,
+                pageTitle: html.pageTitle,
+                metaDescription: html.metaDescription,
+                extractedText: html.extractedText,
+                performanceScore: ps?.performanceScore ?? null,
+                hasEcommerce: html.hasEcommerce,
+                hasBooking: html.hasBooking,
+                isMobileFriendly: html.isMobileFriendly,
+                hasModernDesign: html.hasModernDesign,
+                hasCrm: html.hasCrm,
+                hasAnalytics: html.hasAnalytics,
+                hasSocialPresence: html.hasSocialPresence,
+                hasWhatsappWidget: html.hasWhatsappWidget,
+                hasContactForm: html.hasContactForm,
+                detectedTechs: html.detectedTechs,
+              });
+
+              aiDiagnosisJson = JSON.stringify(diagResult.data);
+              aiScore = diagResult.data.aiScore;
+              diagnosis = diagResult.data;
+              aiTokens = diagResult.tokensUsed;
+              results.totalTokens += diagResult.tokensUsed;
+              results.diagnosed++;
+
+              await prisma.activityLog.create({
+                data: {
+                  leadId: lead.id,
+                  campaignId: lead.campaignId,
+                  type: "ai_analysis",
+                  message: `🧠 Diagnosi AI ${lead.companyName}: score ${aiScore}/100`,
+                  metadata: JSON.stringify({
+                    tokensUsed: diagResult.tokensUsed,
+                    durationMs: diagResult.durationMs,
+                    confidence: diagResult.data.confidence,
+                  }),
+                },
+              });
+            } catch {
+              // fallback to technical analysis only
+            }
+          }
+
+          await prisma.analysis.create({
+            data: {
+              leadId: lead.id,
+              performanceScore: ps?.performanceScore || null,
+              lcp: ps?.lcp || null,
+              fid: ps?.fid || null,
+              cls: ps?.cls || null,
+              isMobileFriendly: html?.isMobileFriendly || false,
+              hasEcommerce: html?.hasEcommerce || false,
+              hasBooking: html?.hasBooking || false,
+              hasCrm: html?.hasCrm || false,
+              hasModernDesign: html?.hasModernDesign || false,
+              issuesJson: JSON.stringify(scoreResult.issues),
+              suggestedService: scoreResult.suggestedService,
+              aiDiagnosis: aiDiagnosisJson,
+              aiScore,
+              aiTokensUsed: aiTokens,
+            },
+          });
+
+          const finalScore = aiScore !== null ? Math.round(scoreResult.score * 0.4 + aiScore * 0.6) : scoreResult.score;
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { score: finalScore, status: "analyzed", email: leadEmail || lead.email },
+          });
+
+          if (!diagnosis && !html?.extractedText) {
+            await prisma.activityLog.create({
+              data: {
+                leadId: lead.id,
+                campaignId: lead.campaignId,
+                type: "analyze",
+                message: `🧾 Analisi tecnica completata per ${lead.companyName}`,
+              },
+            });
+          }
+
+          results.analyzed++;
+        } catch (error: unknown) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          results.errors.push(`Analyze ${lead.companyName}: ${errMsg}`);
         }
-
-        await prisma.analysis.create({
-          data: {
-            leadId: lead.id,
-            performanceScore: ps?.performanceScore || null,
-            lcp: ps?.lcp || null,
-            fid: ps?.fid || null,
-            cls: ps?.cls || null,
-            isMobileFriendly: html?.isMobileFriendly || false,
-            hasEcommerce: html?.hasEcommerce || false,
-            hasBooking: html?.hasBooking || false,
-            hasCrm: html?.hasCrm || false,
-            hasModernDesign: html?.hasModernDesign || false,
-            issuesJson: JSON.stringify(scoreResult.issues),
-            suggestedService: scoreResult.suggestedService,
-            aiDiagnosis: aiDiagnosisJson,
-            aiScore,
-            aiTokensUsed: aiTokens,
-          },
-        });
-
-        const finalScore = aiScore !== null ? Math.round(scoreResult.score * 0.4 + aiScore * 0.6) : scoreResult.score;
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: { score: finalScore, status: "analyzed" },
-        });
-
-        results.analyzed++;
-      } catch (error: unknown) {
-        const errMsg = error instanceof Error ? error.message : String(error);
-        results.errors.push(`Analyze ${lead.companyName}: ${errMsg}`);
       }
     }
 
-    const analyzedLeads = await prisma.lead.findMany({
-      where: {
-        status: "analyzed",
-        messages: { none: {} },
-      },
-      include: { analyses: { orderBy: { analyzedAt: "desc" }, take: 1 } },
-      take: 10,
-    });
+    const generationWhere = {
+      status: "analyzed",
+      messages: { none: {} },
+      ...(hasCampaignFilter ? { campaignId: { in: targetCampaignIds } } : {}),
+    };
 
-    for (const lead of analyzedLeads) {
+    while (true) {
+      const analyzedLeads = await prisma.lead.findMany({
+        where: generationWhere,
+        include: { analyses: { orderBy: { analyzedAt: "desc" }, take: 1 } },
+        orderBy: { updatedAt: "asc" },
+        take: WORKER_BATCH_SIZE,
+      });
+
+      if (analyzedLeads.length === 0) break;
+
+      for (const lead of analyzedLeads) {
       try {
         const analysis = lead.analyses[0];
         if (!analysis) continue;
+
+        const leadEmail = await enrichLeadEmail(lead);
 
         const { problem, service } = mapIssuesToProblemString({
           performanceScore: analysis.performanceScore,
@@ -440,9 +672,9 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
           // optional channel
         }
 
-        const messageType = lead.email ? "email" : lead.phone ? "whatsapp" : "email";
+        const messageType = leadEmail || lead.email ? "email" : lead.phone ? "whatsapp" : "email";
         const readyForEmailSend = Boolean(
-          lead.email &&
+          (leadEmail || lead.email) &&
           qualification.recommendedAction === "send_now" &&
           qualification.suggestedChannel === "email"
         );
@@ -487,6 +719,7 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
         const errMsg = error instanceof Error ? error.message : String(error);
         results.errors.push(`Generate ${lead.companyName}: ${errMsg}`);
       }
+    }
     }
 
     if (!suppressTelegramSummary) {
@@ -634,4 +867,400 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
   }
 
   return stats;
+}
+
+export async function runLeadBackfillWorker(): Promise<BackfillWorkerResult> {
+  await loadPrompts();
+
+  const results: BackfillWorkerResult = {
+    pendingBefore: 0,
+    pendingAfter: 0,
+    emailEnriched: 0,
+    analyzed: 0,
+    diagnosed: 0,
+    generated: 0,
+    readyToSend: 0,
+    manualReview: 0,
+    rejected: 0,
+    messagesSent: 0,
+    sendFailed: 0,
+    totalTokens: 0,
+    errors: [],
+  };
+
+  const backlogWhere = {
+    OR: [
+      { analyses: { none: {} } },
+      { status: "analyzed", messages: { none: {} } },
+      { status: "new" },
+    ],
+  };
+
+  try {
+    results.pendingBefore = await prisma.lead.count({ where: backlogWhere });
+
+    await prisma.activityLog.create({
+      data: {
+        type: "backfill_start",
+        message: `🧹 Backfill avviato: ${results.pendingBefore} lead in arretrato da processare`,
+      },
+    });
+
+    while (true) {
+      const pendingLeads = await prisma.lead.findMany({
+        where: { analyses: { none: {} } },
+        orderBy: { createdAt: "asc" },
+        take: WORKER_BATCH_SIZE,
+      });
+
+      if (pendingLeads.length === 0) break;
+
+      for (const lead of pendingLeads) {
+        try {
+          const previousEmail = lead.email;
+          const leadEmail = await enrichLeadEmail(lead);
+          if (!previousEmail && leadEmail) {
+            results.emailEnriched++;
+          }
+
+          if (!lead.website) {
+            await prisma.analysis.create({
+              data: {
+                leadId: lead.id,
+                performanceScore: null,
+                lcp: null,
+                fid: null,
+                cls: null,
+                isMobileFriendly: false,
+                hasEcommerce: false,
+                hasBooking: false,
+                hasCrm: false,
+                hasModernDesign: false,
+                issuesJson: JSON.stringify(["Nessun sito web disponibile per l'analisi automatica"]),
+                suggestedService: "Sito vetrina o landing page professionale",
+                aiDiagnosis: null,
+                aiScore: null,
+                aiTokensUsed: 0,
+              },
+            });
+
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: { score: leadEmail ? 35 : 20, status: "analyzed", email: leadEmail || lead.email },
+            });
+
+            await prisma.activityLog.create({
+              data: {
+                leadId: lead.id,
+                campaignId: lead.campaignId,
+                type: "backfill_progress",
+                message: `🧾 Backfill: analisi ridotta completata per ${lead.companyName}`,
+              },
+            });
+
+            results.analyzed++;
+            continue;
+          }
+
+          const fullUrl = lead.website.startsWith("http") ? lead.website : `https://${lead.website}`;
+
+          const [pageSpeed, htmlResult] = await Promise.allSettled([
+            analyzePageSpeed(fullUrl),
+            analyzeHtml(fullUrl),
+          ]);
+
+          const ps = pageSpeed.status === "fulfilled" ? pageSpeed.value : null;
+          const html = htmlResult.status === "fulfilled" ? htmlResult.value : null;
+          const scoreResult = calculateScore(ps, html);
+
+          let aiDiagnosisJson: string | null = null;
+          let aiScore: number | null = null;
+          let aiTokens = 0;
+          let diagnosis: SiteDiagnosis | null = null;
+
+          if (html?.extractedText) {
+            try {
+              const diagResult = await diagnoseSiteWithAI({
+                companyName: lead.companyName,
+                sector: lead.sector,
+                website: lead.website,
+                pageTitle: html.pageTitle,
+                metaDescription: html.metaDescription,
+                extractedText: html.extractedText,
+                performanceScore: ps?.performanceScore ?? null,
+                hasEcommerce: html.hasEcommerce,
+                hasBooking: html.hasBooking,
+                isMobileFriendly: html.isMobileFriendly,
+                hasModernDesign: html.hasModernDesign,
+                hasCrm: html.hasCrm,
+                hasAnalytics: html.hasAnalytics,
+                hasSocialPresence: html.hasSocialPresence,
+                hasWhatsappWidget: html.hasWhatsappWidget,
+                hasContactForm: html.hasContactForm,
+                detectedTechs: html.detectedTechs,
+              });
+
+              aiDiagnosisJson = JSON.stringify(diagResult.data);
+              aiScore = diagResult.data.aiScore;
+              diagnosis = diagResult.data;
+              aiTokens = diagResult.tokensUsed;
+              results.totalTokens += diagResult.tokensUsed;
+              results.diagnosed++;
+
+              await prisma.activityLog.create({
+                data: {
+                  leadId: lead.id,
+                  campaignId: lead.campaignId,
+                  type: "ai_analysis",
+                  message: `🧠 Backfill diagnosi AI ${lead.companyName}: score ${aiScore}/100`,
+                  metadata: JSON.stringify({
+                    tokensUsed: diagResult.tokensUsed,
+                    durationMs: diagResult.durationMs,
+                    confidence: diagResult.data.confidence,
+                  }),
+                },
+              });
+            } catch {
+              // fallback to technical analysis only
+            }
+          }
+
+          await prisma.analysis.create({
+            data: {
+              leadId: lead.id,
+              performanceScore: ps?.performanceScore || null,
+              lcp: ps?.lcp || null,
+              fid: ps?.fid || null,
+              cls: ps?.cls || null,
+              isMobileFriendly: html?.isMobileFriendly || false,
+              hasEcommerce: html?.hasEcommerce || false,
+              hasBooking: html?.hasBooking || false,
+              hasCrm: html?.hasCrm || false,
+              hasModernDesign: html?.hasModernDesign || false,
+              issuesJson: JSON.stringify(scoreResult.issues),
+              suggestedService: scoreResult.suggestedService,
+              aiDiagnosis: aiDiagnosisJson,
+              aiScore,
+              aiTokensUsed: aiTokens,
+            },
+          });
+
+          const finalScore = aiScore !== null ? Math.round(scoreResult.score * 0.4 + aiScore * 0.6) : scoreResult.score;
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { score: finalScore, status: "analyzed", email: leadEmail || lead.email },
+          });
+
+          if (!diagnosis && !html?.extractedText) {
+            await prisma.activityLog.create({
+              data: {
+                leadId: lead.id,
+                campaignId: lead.campaignId,
+                type: "backfill_progress",
+                message: `🧾 Backfill tecnico completato per ${lead.companyName}`,
+              },
+            });
+          }
+
+          results.analyzed++;
+        } catch (error: unknown) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          results.errors.push(`Backfill analyze ${lead.companyName}: ${errMsg}`);
+        }
+      }
+    }
+
+    while (true) {
+      const analyzedLeads = await prisma.lead.findMany({
+        where: {
+          status: "analyzed",
+          messages: { none: {} },
+        },
+        include: { analyses: { orderBy: { analyzedAt: "desc" }, take: 1 } },
+        orderBy: { updatedAt: "asc" },
+        take: WORKER_BATCH_SIZE,
+      });
+
+      if (analyzedLeads.length === 0) break;
+
+      for (const lead of analyzedLeads) {
+        try {
+          const analysis = lead.analyses[0];
+          if (!analysis) continue;
+
+          const previousEmail = lead.email;
+          const leadEmail = await enrichLeadEmail(lead);
+          if (!previousEmail && leadEmail) {
+            results.emailEnriched++;
+          }
+
+          const { problem, service } = mapIssuesToProblemString({
+            performanceScore: analysis.performanceScore,
+            hasEcommerce: analysis.hasEcommerce,
+            hasBooking: analysis.hasBooking,
+            isMobileFriendly: analysis.isMobileFriendly,
+            hasModernDesign: analysis.hasModernDesign,
+            hasCrm: analysis.hasCrm,
+          });
+
+          let aiDiag: SiteDiagnosis | null = null;
+          if (analysis.aiDiagnosis) {
+            try {
+              aiDiag = JSON.parse(analysis.aiDiagnosis) as SiteDiagnosis;
+            } catch {
+              // ignore invalid JSON
+            }
+          }
+
+          let qualification: LeadQualification = {
+            priority: lead.score >= 75 ? "alta" : lead.score >= 45 ? "media" : "bassa",
+            reason: "Decisione AI non disponibile; lead lasciato in revisione manuale",
+            bestTiming: "dopo check manuale",
+            suggestedChannel: leadEmail || lead.email ? "email" : lead.phone ? "whatsapp" : "telefono",
+            recommendedAction: "review_manually",
+          };
+
+          if (aiDiag) {
+            try {
+              const qualResult = await qualifyLeadWithAI({
+                companyName: lead.companyName,
+                sector: lead.sector,
+                score: lead.score,
+                diagnosis: aiDiag,
+              });
+              qualification = qualResult.data;
+              results.totalTokens += qualResult.tokensUsed;
+
+              await prisma.activityLog.create({
+                data: {
+                  leadId: lead.id,
+                  campaignId: lead.campaignId,
+                  type: "ai_qualify",
+                  message: `📊 Backfill qualifica AI ${lead.companyName}: ${qualification.recommendedAction}`,
+                  metadata: JSON.stringify({
+                    priority: qualification.priority,
+                    reason: qualification.reason,
+                    bestTiming: qualification.bestTiming,
+                    suggestedChannel: qualification.suggestedChannel,
+                    recommendedAction: qualification.recommendedAction,
+                    score: lead.score,
+                  }),
+                },
+              });
+            } catch {
+              // fallback manual review
+            }
+          }
+
+          if (qualification.recommendedAction === "do_not_contact") {
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: { status: "rejected" },
+            });
+
+            results.rejected++;
+            continue;
+          }
+
+          const emailResult = await generateColdEmail({
+            companyName: lead.companyName,
+            contactName: lead.contactName,
+            sector: lead.sector,
+            problem,
+            suggestedService: analysis.suggestedService || service,
+            aiDiagnosis: aiDiag,
+          });
+          results.totalTokens += emailResult.tokensUsed;
+
+          let whatsappText: string | null = null;
+          try {
+            const waResult = await generateWhatsAppMessage({
+              companyName: lead.companyName,
+              sector: lead.sector,
+              problem,
+              suggestedService: analysis.suggestedService || service,
+              personalizedHook: aiDiag?.personalizedHook ?? null,
+            });
+            whatsappText = waResult.data;
+            results.totalTokens += waResult.tokensUsed;
+          } catch {
+            // optional channel
+          }
+
+          const hasEmail = Boolean(leadEmail || lead.email);
+          const readyForEmailSend = Boolean(
+            hasEmail &&
+            qualification.recommendedAction === "send_now" &&
+            qualification.suggestedChannel === "email"
+          );
+
+          await prisma.message.create({
+            data: {
+              leadId: lead.id,
+              type: hasEmail ? "email" : lead.phone ? "whatsapp" : "email",
+              subject: emailResult.data.subject,
+              content: emailResult.data.body,
+              whatsappContent: whatsappText,
+              status: readyForEmailSend ? "approved" : "draft",
+            },
+          });
+
+          if (readyForEmailSend) {
+            results.readyToSend++;
+          } else {
+            results.manualReview++;
+          }
+          results.generated++;
+        } catch (error: unknown) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          results.errors.push(`Backfill generate ${lead.companyName}: ${errMsg}`);
+        }
+      }
+    }
+
+    const sendResults = await runSendMailWorker({
+      forceRun: true,
+      sendAll: true,
+      suppressTelegramSummary: true,
+    });
+
+    results.messagesSent = sendResults.sent;
+    results.sendFailed = sendResults.failed;
+    results.errors.push(...sendResults.errors.map((error) => `Backfill send ${error}`));
+    results.pendingAfter = await prisma.lead.count({ where: backlogWhere });
+
+    await prisma.activityLog.create({
+      data: {
+        type: "backfill_done",
+        message: `✅ Backfill completato: ${results.analyzed} lead analizzati, ${results.generated} messaggi generati, ${results.messagesSent} email inviate`,
+        metadata: JSON.stringify({
+          pendingBefore: results.pendingBefore,
+          pendingAfter: results.pendingAfter,
+          emailEnriched: results.emailEnriched,
+          readyToSend: results.readyToSend,
+          manualReview: results.manualReview,
+          rejected: results.rejected,
+          sendFailed: results.sendFailed,
+          totalTokens: results.totalTokens,
+          errors: results.errors.length,
+        }),
+      },
+    });
+
+    return results;
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    results.errors.push(errMsg);
+
+    await prisma.activityLog.create({
+      data: {
+        type: "backfill_error",
+        message: `❌ Backfill fallito: ${errMsg}`,
+      },
+    });
+
+    return results;
+  } finally {
+    clearPromptCache();
+  }
 }

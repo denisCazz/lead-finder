@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const JOB_MAP: Record<string, string> = {
   continuous: "/api/cron/continuous?force=true",
+  backfill: "/api/cron/backfill",
   daily: "/api/cron/daily",
   morning: "/api/cron/morning",
   "suggest-cities": "/api/ai/suggest-cities",
@@ -12,7 +13,7 @@ const JOB_MAP: Record<string, string> = {
  * Proxy that triggers a cron/AI job server-side (never exposes CRON_SECRET to the client).
  * Protected by the auth middleware (cookie-based session).
  *
- * Body: { job: "continuous" | "daily" | "morning" | "suggest-cities", params?: Record<string, unknown> }
+ * Body: { job: "continuous" | "backfill" | "daily" | "morning" | "suggest-cities", params?: Record<string, unknown> }
  */
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));

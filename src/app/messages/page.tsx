@@ -60,6 +60,13 @@ export default function MessagesPage() {
     setTimeout(() => setCopied(null), 2000);
   }
 
+  const summary = {
+    total: messages.length,
+    approved: messages.filter((message) => message.status === "approved").length,
+    drafts: messages.filter((message) => message.status === "draft").length,
+    sent: messages.filter((message) => message.status === "sent").length,
+  };
+
   return (
     <div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-8">
@@ -73,11 +80,25 @@ export default function MessagesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 mb-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-6">
+        {[
+          { label: "Totali", value: summary.total },
+          { label: "Bozze", value: summary.drafts },
+          { label: "Approvati", value: summary.approved },
+          { label: "Inviati", value: summary.sent },
+        ].map((item) => (
+          <div key={item.label} className="surface-card p-4">
+            <p className="text-xs text-[var(--muted-foreground)]">{item.label}</p>
+            <p className="mt-2 text-2xl font-bold">{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="toolbar-wrap mb-6">
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] text-sm"
+          className="min-w-[180px] px-4 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] text-sm"
         >
           <option value="">Tutti</option>
           <option value="draft">Bozze</option>
@@ -85,6 +106,9 @@ export default function MessagesPage() {
           <option value="sent">Inviati</option>
           <option value="failed">Falliti</option>
         </select>
+        <div className="px-4 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm text-[var(--muted-foreground)]">
+          L&apos;AI approva automaticamente i messaggi pronti per l&apos;invio. Da qui puoi solo controllare o forzare casi specifici.
+        </div>
       </div>
 
       {loading ? (
@@ -96,9 +120,10 @@ export default function MessagesPage() {
       ) : (
         <div className="space-y-3">
           {messages.map((msg) => (
-            <div key={msg.id} className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3 flex-wrap">
+            <div key={msg.id} className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-3 flex-wrap">
                   <span className={`text-xs px-2 py-1 rounded-full ${
                     msg.status === "draft" ? "bg-gray-500/20 text-gray-400" :
                     msg.status === "approved" ? "bg-blue-500/20 text-blue-400" :
@@ -111,12 +136,18 @@ export default function MessagesPage() {
                     {msg.lead.companyName}
                   </a>
                   {msg.subject && (
-                    <span className="text-sm text-[var(--muted-foreground)] truncate max-w-xs sm:max-w-md">
+                    <span className="text-sm text-[var(--muted-foreground)] break-words sm:max-w-md">
                       {msg.subject}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                  <div className="mt-2 text-xs text-[var(--muted-foreground)] space-y-1">
+                    <p>{msg.lead.email || msg.lead.phone || "Nessun contatto"}</p>
+                    <p>Creato: {new Date(msg.createdAt).toLocaleString("it-IT")}</p>
+                    {msg.sentAt && <p>Inviato: {new Date(msg.sentAt).toLocaleString("it-IT")}</p>}
+                  </div>
+                </div>
+                <div className="toolbar-wrap lg:max-w-[320px] lg:justify-end">
                   <button
                     onClick={() => setPreview(preview?.id === msg.id ? null : msg)}
                     className="p-1.5 rounded hover:bg-[var(--muted)] text-[var(--muted-foreground)]"

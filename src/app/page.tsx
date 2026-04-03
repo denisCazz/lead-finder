@@ -104,6 +104,15 @@ async function getDashboardData() {
         prisma.lead.count({ where: { analyses: { some: {} } } }),
         prisma.lead.count({ where: { score: { gte: 75 } } }),
         prisma.lead.count({ where: { analyses: { none: {} } } }),
+        prisma.lead.count({
+          where: {
+            OR: [
+              { analyses: { none: {} } },
+              { status: "analyzed", messages: { none: {} } },
+              { status: "new" },
+            ],
+          },
+        }),
         prisma.message.count({ where: { type: "email", status: "draft" } }),
         prisma.message.count({ where: { type: "email", status: "sent", sentAt: { gte: today } } }),
         prisma.message.count({ where: { type: "email", status: "failed" } }),
@@ -173,6 +182,7 @@ async function getDashboardData() {
       analyzedLeads,
       hotLeadCount,
       pendingAnalysisCount,
+        backlogCount,
       draftEmailCount,
       sentTodayCount,
       failedEmailCount,
@@ -226,6 +236,7 @@ async function getDashboardData() {
         analyzedLeads: 0,
         hotLeadCount: 0,
         pendingAnalysisCount: 0,
+        backlogCount: 0,
         draftEmailCount: 0,
         sentTodayCount: 0,
         failedEmailCount: 0,
@@ -281,6 +292,7 @@ export default async function DashboardPage() {
   const primaryCards = [
     { label: "Lead Totali", value: data.metrics.totalLeads, detail: `+${data.metrics.leadsToday} oggi`, icon: Users, tone: "text-sky-300 bg-sky-500/10 border-sky-500/20" },
     { label: "Hot Leads", value: data.metrics.hotLeadCount, detail: "score >= 75", icon: Flame, tone: "text-orange-300 bg-orange-500/10 border-orange-500/20" },
+    { label: "Arretrato", value: data.metrics.backlogCount, detail: "lead ancora da scodare", icon: RefreshCw, tone: "text-indigo-300 bg-indigo-500/10 border-indigo-500/20" },
     { label: "Outreach Manuale", value: data.metrics.outreachCount, detail: "eccezioni aperte", icon: MessageCircle, tone: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20" },
     { label: "Email Oggi", value: data.metrics.sentTodayCount, detail: `${data.metrics.draftEmailCount} draft pronte`, icon: Send, tone: "text-green-300 bg-green-500/10 border-green-500/20" },
   ];

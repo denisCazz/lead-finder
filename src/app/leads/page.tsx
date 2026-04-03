@@ -86,10 +86,10 @@ export default function LeadsPage() {
           <p className="text-[var(--muted-foreground)] mt-1 text-sm">{total} lead totali</p>
         </div>
         <Link
-          href="/campaigns"
+          href="/jobs"
           className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm font-medium text-center"
         >
-          + Nuova Campagna
+          Lancia job
         </Link>
       </div>
 
@@ -126,7 +126,79 @@ export default function LeadsPage() {
         ) : leads.length === 0 ? (
           <div className="p-8 text-center text-[var(--muted-foreground)]">Nessun lead trovato</div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <div className="mobile-card-list p-3 md:hidden">
+              {leads.map((lead) => (
+                <div key={lead.id} className="surface-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link href={`/leads/${lead.id}`} className="font-semibold text-[var(--primary)] hover:underline">
+                          {lead.companyName}
+                        </Link>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          lead.status === "new" ? "bg-blue-500/20 text-blue-400" :
+                          lead.status === "analyzed" ? "bg-yellow-500/20 text-yellow-400" :
+                          lead.status === "contacted" ? "bg-green-500/20 text-green-400" :
+                          lead.status === "replied" ? "bg-emerald-500/20 text-emerald-400" :
+                          "bg-gray-500/20 text-gray-400"
+                        }`}>
+                          {lead.status}
+                        </span>
+                      </div>
+                      <div className="mt-2 space-y-1 text-xs text-[var(--muted-foreground)]">
+                        <p>{lead.sector || "Settore non definito"}</p>
+                        <p>{lead.city || "Città non definita"}</p>
+                        <p>{lead.email || lead.phone || "Nessun contatto"}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-lg font-bold ${
+                        lead.score >= 70 ? "text-red-400" : lead.score >= 40 ? "text-yellow-400" : "text-green-400"
+                      }`}>
+                        {lead.score}
+                      </p>
+                      {lead.website && (
+                        <a
+                          href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                        >
+                          <ExternalLink className="w-3 h-3" /> sito
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div className="toolbar-wrap mt-4">
+                    {lead.status === "new" && (
+                      <button
+                        onClick={() => handleAnalyze(lead.id)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--muted)] px-3 py-2 text-xs"
+                      >
+                        <BarChart3 className="w-4 h-4" /> Analizza
+                      </button>
+                    )}
+                    {(lead.status === "analyzed" || lead.status === "new") && (
+                      <button
+                        onClick={() => handleGenerate(lead.id)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--muted)] px-3 py-2 text-xs"
+                      >
+                        <Sparkles className="w-4 h-4" /> Genera testo
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(lead.id)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300"
+                    >
+                      <Trash2 className="w-4 h-4" /> Elimina
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[var(--muted-foreground)] border-b border-[var(--border)] bg-[var(--muted)]/30">
@@ -211,7 +283,8 @@ export default function LeadsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
 
         {/* Pagination */}

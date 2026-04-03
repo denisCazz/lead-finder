@@ -21,7 +21,8 @@ const LOG_ICONS: Record<string, React.ElementType> = {
   ai_qualify: Target, ai_generate: Mail, ai_done: CheckCircle2, ai_error: AlertCircle,
   ai_city_suggestion: MapPin, ai_campaign_created: MapPin, campaign_completed: CheckCircle2,
   automation_continuous_start: RefreshCw, automation_continuous_done: CheckCircle2,
-  automation_continuous_error: AlertCircle, telegram_batch: Mail, send: Send, city: MapPin,
+  automation_continuous_error: AlertCircle, backfill_start: RefreshCw, backfill_progress: Sparkles,
+  backfill_done: CheckCircle2, backfill_error: AlertCircle, telegram_batch: Mail, send: Send, city: MapPin,
 };
 const LOG_COLORS: Record<string, string> = {
   scrape_error: "text-red-400", ai_error: "text-red-400",
@@ -31,7 +32,9 @@ const LOG_COLORS: Record<string, string> = {
   ai_qualify: "text-purple-400", ai_plan: "text-purple-400",
   ai_city_suggestion: "text-emerald-400", ai_campaign_created: "text-emerald-400",
   campaign_completed: "text-green-400", automation_continuous_start: "text-cyan-400",
-  automation_continuous_done: "text-green-400", automation_continuous_error: "text-red-400", telegram_batch: "text-sky-400",
+  automation_continuous_done: "text-green-400", automation_continuous_error: "text-red-400",
+  backfill_start: "text-indigo-400", backfill_progress: "text-purple-400",
+  backfill_done: "text-green-400", backfill_error: "text-red-400", telegram_batch: "text-sky-400",
 };
 const TYPE_FILTERS = [
   { value: "all", label: "Tutti" },

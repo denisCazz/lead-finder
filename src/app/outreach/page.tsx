@@ -106,6 +106,8 @@ export default function OutreachPage() {
   }
 
   const totalPages = Math.ceil(total / 25);
+  const phoneOnlyCount = leads.filter((lead) => lead.phone && !lead.email).length;
+  const reviewCount = leads.filter((lead) => Boolean(lead.email && lead.messages[0]?.status === "draft")).length;
 
   function getWhatsAppLink(phone: string, text: string) {
     const clean = phone.replace(/\D/g, "");
@@ -133,8 +135,23 @@ export default function OutreachPage() {
         </button>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-3 mb-5">
+        <div className="surface-card p-4">
+          <p className="text-xs text-[var(--muted-foreground)]">Lead in coda</p>
+          <p className="mt-2 text-2xl font-bold">{total}</p>
+        </div>
+        <div className="surface-card p-4">
+          <p className="text-xs text-[var(--muted-foreground)]">Solo telefono</p>
+          <p className="mt-2 text-2xl font-bold">{phoneOnlyCount}</p>
+        </div>
+        <div className="surface-card p-4">
+          <p className="text-xs text-[var(--muted-foreground)]">Revisione testi</p>
+          <p className="mt-2 text-2xl font-bold">{reviewCount}</p>
+        </div>
+      </div>
+
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-5">
+      <div className="toolbar-wrap mb-5">
         <div className="flex items-center gap-2 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm">
           <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
           <input
@@ -227,7 +244,7 @@ export default function OutreachPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                  <div className="toolbar-wrap flex-shrink-0 sm:justify-end">
                     {lead.phone && waText && (
                       <a
                         href={getWhatsAppLink(lead.phone, waText)}
