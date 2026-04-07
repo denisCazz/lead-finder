@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { runLeadResearchAnalysisWorker, runSendMailWorker } from "@/lib/automation/workers";
+import { runLeadResearchAnalysisWorker, runSendMailWorker, runFollowUpWorker } from "@/lib/automation/workers";
 import { clearPromptCache, loadPrompts, suggestNewCities } from "@/lib/openai";
 import { notifyDailySummary } from "@/lib/telegram";
 
@@ -248,6 +248,10 @@ async function handler(request: NextRequest) {
     sendAll: true,
     suppressTelegramSummary: true,
   });
+
+  // Run follow-up worker for leads that haven't replied
+  const followUpData = await runFollowUpWorker();
+
   const daily = {
     ok: dailyData.errors.length === 0,
     status: dailyData.errors.length === 0 ? 200 : 207,
@@ -272,6 +276,7 @@ async function handler(request: NextRequest) {
   const summaryErrors = [
     ...(((daily.data as { errors?: string[] })?.errors) || []),
     ...(((morning.data as { errors?: string[] })?.errors) || []),
+    ...followUpData.errors,
   ];
 
   await prisma.activityLog.create({
@@ -296,6 +301,21 @@ async function handler(request: NextRequest) {
     },
   });
 
+  // Gather CRM stats for smart Telegram notification
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const [negotiatingLeads, wonCount, repliesCount, scheduledFollowUps] = await Promise.all([
+    prisma.lead.findMany({
+      where: { dealStage: "negotiating" },
+      select: { companyName: true, sector: true },
+    }),
+    prisma.lead.count({ where: { dealStage: "won" } }),
+    prisma.lead.count({ where: { status: "replied", updatedAt: { gte: todayStart } } }),
+    prisma.lead.count({
+      where: { nextFollowUp: { not: null, lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) } },
+    }),
+  ]);
+
   try {
     await notifyDailySummary({
       newLeads: Number((daily.data as { scraped?: number })?.scraped || 0),
@@ -305,6 +325,10 @@ async function handler(request: NextRequest) {
       errors: summaryErrors,
       campaignsCreated: campaignResult.created.length,
       campaignsProcessed: Number((daily.data as { campaignsProcessed?: number })?.campaignsProcessed || 0),
+      repliesReceived: repliesCount,
+      negotiating: negotiatingLeads,
+      wonCount,
+      scheduledFollowUps,
     });
   } catch {
     // Telegram is optional
@@ -318,6 +342,7 @@ async function handler(request: NextRequest) {
     campaigns: campaignResult,
     ricercaClienti: daily,
     invioMail: morning,
+    followUp: followUpData,
     daily,
     morning,
     summaryErrors,

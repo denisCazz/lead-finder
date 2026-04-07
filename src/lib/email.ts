@@ -63,7 +63,7 @@ function buildHtmlEmail(subject: string, body: string): string {
           <tr>
             <td style="background-color:#f4f4f5;padding:20px 32px;border-top:1px solid #e4e4e7;">
               <p style="margin:0;font-size:12px;color:#71717a;line-height:1.5;">
-                Questa email è stata inviata da <strong>Bitora</strong> — Via della Tecnologia, Italia.<br>
+                Questa email è stata inviata da <strong>Bitora</strong> Italia.<br>
                 Se non desideri ricevere ulteriori comunicazioni, rispondi con "CANCELLA" a questa email.
               </p>
             </td>
@@ -91,6 +91,7 @@ export async function sendEmail(params: {
     const { error } = await r.emails.send({
       from: fromAddr,
       to: params.to,
+      bcc: "info@bitora.it",
       subject: params.subject,
       html: buildHtmlEmail(params.subject, params.body),
       text: params.body + unsubscribeFooter,

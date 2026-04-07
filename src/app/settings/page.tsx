@@ -187,6 +187,35 @@ export default function SettingsPage() {
               )}
             </div>
 
+            {/* WhatsApp Business */}
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                📱 WhatsApp Business API
+              </h2>
+              <p className="text-sm text-[var(--muted-foreground)] mb-4">
+                Per inviare automaticamente i messaggi WhatsApp configura le variabili nel .env:
+              </p>
+              <div className="rounded-lg bg-[var(--muted)] p-3 text-xs font-mono text-[var(--muted-foreground)] space-y-1 mb-4">
+                <p>WHATSAPP_TOKEN=il_tuo_token</p>
+                <p>WHATSAPP_PHONE_ID=il_tuo_phone_id</p>
+                <p>WHATSAPP_TEMPLATE_NAME=bitora_intro</p>
+              </div>
+              <div className="text-sm text-[var(--muted-foreground)] space-y-2">
+                <p><b className="text-[var(--foreground)]">Setup:</b></p>
+                <ol className="list-decimal list-inside space-y-1 text-xs">
+                  <li>Crea una app su <span className="text-blue-400">developers.facebook.com</span></li>
+                  <li>Abilita il prodotto WhatsApp nell&apos;app</li>
+                  <li>Aggiungi e verifica il numero di telefono business</li>
+                  <li>Crea un template messaggio (es. &quot;bitora_intro&quot;)</li>
+                  <li>Genera un token permanente (System User)</li>
+                  <li>Inserisci token e phone ID nel .env</li>
+                </ol>
+              </div>
+              <div className={`mt-4 text-sm font-medium ${settings.whatsapp_status === "configured" ? "text-green-400" : "text-yellow-400"}`}>
+                {settings.whatsapp_status === "configured" ? "✅ WhatsApp API configurato" : "⚠️ Senza API i messaggi vengono inviati come link su Telegram"}
+              </div>
+            </div>
+
             {/* CSV Import */}
             <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
               <h2 className="text-lg font-semibold mb-4">Import CSV</h2>

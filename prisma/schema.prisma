@@ -28,6 +28,12 @@ model Lead {
   analyses    Analysis[]
   messages    Message[]
   logs        ActivityLog[]
+  whatsappChats WhatsAppChat[]
+  dealStage      String    @default("new") @map("deal_stage") // new, analyzed, contacted, replied, negotiating, won, lost
+  dealNotes      String?   @map("deal_notes") @db.Text
+  nextFollowUp   DateTime? @map("next_follow_up")
+  lastContactedAt DateTime? @map("last_contacted_at")
+  followUpCount  Int       @default(0) @map("follow_up_count")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
@@ -35,6 +41,7 @@ model Lead {
   @@index([sector])
   @@index([status])
   @@index([campaignId])
+  @@index([dealStage])
   @@map("leads")
 }
 
@@ -132,4 +139,34 @@ model CityLog {
   @@index([city, sector])
   @@index([scrapedAt])
   @@map("city_logs")
+}
+
+model WhatsAppChat {
+  id        Int      @id @default(autoincrement())
+  phone     String   // normalized 39xxxxxxxxxx
+  name      String?  // contact name from WhatsApp profile or lead
+  leadId    Int?     @map("lead_id")
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  messages  WhatsAppMessage[]
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([phone])
+  @@index([leadId])
+  @@map("whatsapp_chats")
+}
+
+model WhatsAppMessage {
+  id        Int      @id @default(autoincrement())
+  chatId    Int      @map("chat_id")
+  chat      WhatsAppChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  waId      String?  @map("wa_id") // WhatsApp message ID from Meta
+  direction String   // "in" or "out"
+  body      String   @db.Text
+  status    String   @default("sent") // sent, delivered, read, failed
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([chatId])
+  @@index([createdAt])
+  @@map("whatsapp_messages")
 }

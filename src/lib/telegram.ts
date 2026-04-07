@@ -148,18 +148,73 @@ export async function notifyDailySummary(stats: {
   errors?: string[];
   campaignsCreated?: number;
   campaignsProcessed?: number;
+  whatsappSent?: number;
+  repliesReceived?: number;
+  negotiating?: { companyName: string; sector: string | null }[];
+  wonCount?: number;
+  scheduledFollowUps?: number;
 }) {
-  const text = `📊 <b>Riepilogo Automazione</b>
+  let text = `📊 <b>Riepilogo Automazione</b>
 
 🆕 Nuovi lead: ${stats.newLeads}
 🔍 Analizzati: ${stats.analyzed}
 ✉️ Testi generati: ${stats.messagesGenerated}
-📤 Email inviate: ${stats.messagesSent}
-🚀 Campagne create: ${stats.campaignsCreated ?? 0}
-🎯 Campagne processate: ${stats.campaignsProcessed ?? 0}
-❌ Errori: ${stats.errors?.length ?? 0}${stats.errors && stats.errors.length > 0 ? `\n\nDettagli:\n${stats.errors.slice(0, 5).map((error) => `• ${escapeHtml(error)}`).join("\n")}` : ""}`;
+📧 Email inviate: ${stats.messagesSent}`;
+
+  if (stats.whatsappSent !== undefined) {
+    text += `\n📱 WhatsApp inviati: ${stats.whatsappSent}`;
+  }
+  if (stats.repliesReceived !== undefined) {
+    text += `\n💬 Risposte ricevute: ${stats.repliesReceived}`;
+  }
+
+  text += `\n🚀 Campagne create: ${stats.campaignsCreated ?? 0}
+🎯 Campagne processate: ${stats.campaignsProcessed ?? 0}`;
+
+  if (stats.negotiating && stats.negotiating.length > 0) {
+    text += `\n\n🤝 <b>In trattativa (${stats.negotiating.length}):</b>`;
+    for (const n of stats.negotiating.slice(0, 10)) {
+      text += `\n• ${escapeHtml(n.companyName)}${n.sector ? ` (${escapeHtml(n.sector)})` : ""}`;
+    }
+  }
+
+  if (stats.wonCount) {
+    text += `\n\n✅ Lead chiusi (won): ${stats.wonCount}`;
+  }
+
+  if (stats.scheduledFollowUps) {
+    text += `\n⏰ Follow-up programmati domani: ${stats.scheduledFollowUps}`;
+  }
+
+  text += `\n❌ Errori: ${stats.errors?.length ?? 0}`;
+  if (stats.errors && stats.errors.length > 0) {
+    text += `\n\nDettagli:\n${stats.errors.slice(0, 5).map((error) => `• ${escapeHtml(error)}`).join("\n")}`;
+  }
 
   return sendTelegramMessage(text);
+}
+
+export async function notifyNegotiating(data: {
+  companyName: string;
+  sector: string | null;
+  city: string | null;
+  phone: string;
+  summary: string;
+  suggestedNextAction: string;
+}) {
+  const text = `🤝 <b>Nuovo lead in TRATTATIVA!</b>
+
+🏢 <b>${escapeHtml(data.companyName)}</b>
+📍 ${escapeHtml(data.city || "N/A")} | 🏷 ${escapeHtml(data.sector || "N/A")}
+📱 ${escapeHtml(data.phone)}
+
+💬 <i>${escapeHtml(data.summary)}</i>
+📋 Azione suggerita: ${escapeHtml(data.suggestedNextAction)}`;
+
+  const waLink = `https://wa.me/${data.phone.replace(/\D/g, "")}`;
+  const keyboard: InlineKeyboard = [[{ text: "📱 Rispondi su WhatsApp", url: waLink }]];
+
+  return sendTelegramMessage(text, keyboard);
 }
 
 function escapeHtml(text: string): string {

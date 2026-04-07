@@ -12,6 +12,7 @@ export async function GET() {
     automation_interval_minutes: "120",
     automation_sectors: process.env.AUTOMATION_SECTORS || "",
     last_continuous_run_at: "",
+    whatsapp_status: process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID ? "configured" : "not_configured",
   };
 
   const settings = await prisma.setting.findMany();

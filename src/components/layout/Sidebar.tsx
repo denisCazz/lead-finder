@@ -17,6 +17,7 @@ import {
   BarChart3,
   Terminal,
   Flame,
+  Smartphone,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/hot-leads", label: "Hot Leads", icon: Flame },
   { href: "/messages", label: "Messaggi", icon: MessageSquare },
+  { href: "/whatsapp", label: "Chat WhatsApp", icon: Smartphone },
   { href: "/outreach", label: "Outreach", icon: MessageCircle },
   { href: "/logs", label: "Log", icon: ScrollText },
   { href: "/jobs", label: "Esegui Job", icon: Terminal },

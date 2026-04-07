@@ -4,6 +4,7 @@ import {
   clearPromptCache,
   diagnoseSiteWithAI,
   generateColdEmail,
+  generateFollowUpMessage,
   generateWhatsAppMessage,
   LeadQualification,
   loadPrompts,
@@ -16,8 +17,9 @@ import { analyzePageSpeed } from "@/lib/analyzers/pagespeed";
 import { calculateScore } from "@/lib/analyzers/scorer";
 import { scrapeGoogleMaps } from "@/lib/scrapers/google-maps";
 import { scrapePagineGialle } from "@/lib/scrapers/pagine-gialle";
-import { notifyDailySummary, notifyLeadBatch, TelegramLeadSummary } from "@/lib/telegram";
+import { notifyDailySummary, notifyLeadBatch, sendTelegramMessage, TelegramLeadSummary } from "@/lib/telegram";
 import { extractDomain } from "@/lib/utils";
+import { sendWhatsAppTemplate, sendWhatsAppText, isWhatsAppConfigured } from "@/lib/whatsapp";
 import * as cheerio from "cheerio";
 
 export type DailyWorkerInput = {
@@ -799,6 +801,12 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
           qualification.recommendedAction === "send_now" &&
           qualification.suggestedChannel === "email"
         );
+        const readyForWhatsAppSend = Boolean(
+          !readyForEmailSend &&
+          messageType === "whatsapp" &&
+          lead.phone &&
+          qualification.recommendedAction === "send_now"
+        );
 
         const message = await prisma.message.create({
           data: {
@@ -807,7 +815,7 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
             subject: emailResult.data.subject,
             content: emailResult.data.body,
             whatsappContent: whatsappText,
-            status: readyForEmailSend ? "approved" : "draft",
+            status: readyForEmailSend || readyForWhatsAppSend ? "approved" : "draft",
           },
         });
 
@@ -869,7 +877,7 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
   const suppressTelegramSummary = input.suppressTelegramSummary === true;
 
   const settingsRows = await prisma.setting.findMany({
-    where: { key: { in: ["auto_send_enabled", "max_emails_per_day", "email_from"] } },
+    where: { key: { in: ["auto_send_enabled", "max_emails_per_day", "email_from", "max_whatsapp_per_day"] } },
   });
   const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
 
@@ -879,6 +887,7 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
   }
 
   const maxPerDay = parseInt(settings.max_emails_per_day || "20", 10);
+  const maxWhatsAppPerDay = parseInt(settings.max_whatsapp_per_day || "50", 10);
   const emailFrom = settings.email_from || process.env.EMAIL_FROM || "noreply@bitora.it";
 
   const todayStart = new Date();
@@ -944,7 +953,7 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
       });
       await prisma.lead.update({
         where: { id: message.lead.id },
-        data: { status: "contacted" },
+        data: { status: "contacted", dealStage: "contacted", lastContactedAt: new Date() },
       });
       await prisma.activityLog.create({
         data: {
@@ -970,6 +979,103 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
       });
       stats.failed++;
       stats.errors.push(`${message.lead.companyName}: ${result.error}`);
+    }
+  }
+
+  // ── WhatsApp send pass ──
+  // Send approved WhatsApp messages (via Cloud API or Telegram fallback)
+  // Rate limit: respect max_whatsapp_per_day setting (default 50, Meta limit 250)
+  const todayStartWa = new Date();
+  todayStartWa.setHours(0, 0, 0, 0);
+  const waSentToday = await prisma.activityLog.count({
+    where: {
+      type: "send",
+      message: { startsWith: "📱" },
+      createdAt: { gte: todayStartWa },
+    },
+  });
+  const waLimit = sendAll ? Infinity : maxWhatsAppPerDay - waSentToday;
+  const waRemaining = sendAll ? undefined : Math.min(Math.max(0, waLimit), Math.max(0, maxPerDay - sentToday - stats.sent));
+  if (waRemaining === undefined || waRemaining > 0) {
+    const waCandidates = await prisma.message.findMany({
+      where: {
+        status: "approved",
+        type: "whatsapp",
+        lead: {
+          phone: { not: null },
+          status: { not: "rejected" },
+        },
+      },
+      include: { lead: true },
+      ...(typeof waRemaining === "number" ? { take: waRemaining } : {}),
+      orderBy: { createdAt: "asc" },
+    });
+
+    for (const message of waCandidates) {
+      if (!message.lead.phone) continue;
+      const waContent = message.whatsappContent || message.content;
+
+      if (isWhatsAppConfigured()) {
+        const waResult = await sendWhatsAppTemplate(message.lead.phone, {
+          contactName: message.lead.contactName || message.lead.companyName,
+          serviceHook: waContent.substring(0, 120),
+        });
+
+        if (waResult.success) {
+          await prisma.message.update({
+            where: { id: message.id },
+            data: { status: "sent", sentAt: new Date() },
+          });
+          await prisma.lead.update({
+            where: { id: message.lead.id },
+            data: { status: "contacted", dealStage: "contacted", lastContactedAt: new Date() },
+          });
+          await prisma.activityLog.create({
+            data: {
+              leadId: message.lead.id,
+              campaignId: message.lead.campaignId,
+              type: "send",
+              message: `📱 WhatsApp inviato: ${message.lead.companyName} (${waResult.recipientPhone})`,
+              metadata: JSON.stringify({ messageId: message.id, waMessageId: waResult.messageId }),
+            },
+          });
+          stats.sent++;
+          continue;
+        }
+
+        // WhatsApp API failed — log and fall through to Telegram
+        await prisma.activityLog.create({
+          data: {
+            leadId: message.lead.id,
+            campaignId: message.lead.campaignId,
+            type: "send",
+            message: `⚠️ WhatsApp API fallito per ${message.lead.companyName}: ${waResult.error}`,
+          },
+        });
+      }
+
+      // Fallback: send precompiled WhatsApp link via Telegram
+      try {
+        const phone = message.lead.phone.replace(/\D/g, "");
+        const waLink = `https://wa.me/39${phone}?text=${encodeURIComponent(waContent)}`;
+        await sendTelegramMessage(
+          `📱 <b>WhatsApp da inviare</b>\n\n🏢 <b>${message.lead.companyName}</b>\n📞 ${message.lead.phone}\n\n📄 <i>${waContent.substring(0, 250)}...</i>`,
+          [[{ text: "📱 Invia su WhatsApp", url: waLink }]]
+        );
+        // Mark as sent (via Telegram link)
+        await prisma.message.update({
+          where: { id: message.id },
+          data: { status: "sent", sentAt: new Date() },
+        });
+        await prisma.lead.update({
+          where: { id: message.lead.id },
+          data: { status: "contacted", dealStage: "contacted", lastContactedAt: new Date() },
+        });
+        stats.sent++;
+      } catch {
+        stats.failed++;
+        stats.errors.push(`${message.lead.companyName}: Telegram fallback failed`);
+      }
     }
   }
 
@@ -1313,24 +1419,31 @@ export async function runLeadBackfillWorker(): Promise<BackfillWorkerResult> {
           }
 
           const hasEmail = Boolean(leadEmail || lead.email);
+          const messageType = hasEmail ? "email" : lead.phone ? "whatsapp" : "email";
           const readyForEmailSend = Boolean(
             hasEmail &&
             qualification.recommendedAction === "send_now" &&
             qualification.suggestedChannel === "email"
           );
+          const readyForWhatsAppSend = Boolean(
+            !readyForEmailSend &&
+            messageType === "whatsapp" &&
+            lead.phone &&
+            qualification.recommendedAction === "send_now"
+          );
 
           await prisma.message.create({
             data: {
               leadId: lead.id,
-              type: hasEmail ? "email" : lead.phone ? "whatsapp" : "email",
+              type: messageType,
               subject: emailResult.data.subject,
               content: emailResult.data.body,
               whatsappContent: whatsappText,
-              status: readyForEmailSend ? "approved" : "draft",
+              status: readyForEmailSend || readyForWhatsAppSend ? "approved" : "draft",
             },
           });
 
-          if (readyForEmailSend) {
+          if (readyForEmailSend || readyForWhatsAppSend) {
             results.readyToSend++;
           } else {
             results.manualReview++;
@@ -1388,4 +1501,145 @@ export async function runLeadBackfillWorker(): Promise<BackfillWorkerResult> {
   } finally {
     clearPromptCache();
   }
+}
+
+// ─── Follow-up Worker ──────────────────────────────────────────────────
+// Sends automated follow-ups to contacted leads that haven't replied.
+// Anti-spam: max 2 follow-ups per lead ever (1 after 3 days, 1 after 7 days).
+export type FollowUpWorkerResult = {
+  followUpsSent: number;
+  followUpsFailed: number;
+  errors: string[];
+  totalTokens: number;
+};
+
+export async function runFollowUpWorker(): Promise<FollowUpWorkerResult> {
+  const results: FollowUpWorkerResult = {
+    followUpsSent: 0,
+    followUpsFailed: 0,
+    errors: [],
+    totalTokens: 0,
+  };
+
+  const settingsRows = await prisma.setting.findMany({
+    where: { key: { in: ["max_whatsapp_per_day", "max_emails_per_day", "email_from"] } },
+  });
+  const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
+  const maxWhatsAppPerDay = parseInt(settings.max_whatsapp_per_day || "50", 10);
+  const maxEmailsPerDay = parseInt(settings.max_emails_per_day || "20", 10);
+  const emailFrom = settings.email_from || process.env.EMAIL_FROM || "noreply@bitora.it";
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  // Check daily limits
+  const emailsSentToday = await prisma.message.count({
+    where: { status: "sent", type: "email", sentAt: { gte: todayStart } },
+  });
+  const waSentToday = await prisma.activityLog.count({
+    where: { type: "send", message: { startsWith: "📱" }, createdAt: { gte: todayStart } },
+  });
+
+  const now = new Date();
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  // Find leads eligible for follow-up:
+  // - status "contacted" (no reply yet)
+  // - dealStage "contacted"
+  // - lastContactedAt > 3 days ago for first follow-up, > 7 days for second
+  // - followUpCount < 2
+  const eligibleLeads = await prisma.lead.findMany({
+    where: {
+      status: "contacted",
+      dealStage: "contacted",
+      followUpCount: { lt: 2 },
+      lastContactedAt: { not: null, lte: threeDaysAgo },
+    },
+    include: {
+      messages: { orderBy: { createdAt: "desc" }, take: 1 },
+    },
+    take: 20,
+    orderBy: { lastContactedAt: "asc" },
+  });
+
+  for (const lead of eligibleLeads) {
+    // Follow-up #2 requires 7 days since last contact
+    if (lead.followUpCount === 1 && lead.lastContactedAt && lead.lastContactedAt > sevenDaysAgo) {
+      continue;
+    }
+
+    const originalMessage = lead.messages[0];
+    if (!originalMessage) continue;
+
+    const followUpNumber = lead.followUpCount + 1;
+    const channel = lead.email ? "email" : lead.phone ? "whatsapp" : null;
+    if (!channel) continue;
+
+    // Check rate limits
+    if (channel === "email" && emailsSentToday + results.followUpsSent >= maxEmailsPerDay) continue;
+    if (channel === "whatsapp" && waSentToday + results.followUpsSent >= maxWhatsAppPerDay) continue;
+
+    try {
+      const followUp = await generateFollowUpMessage({
+        companyName: lead.companyName,
+        contactName: lead.contactName,
+        sector: lead.sector,
+        originalMessage: originalMessage.content,
+        followUpNumber,
+        channel,
+      });
+      results.totalTokens += followUp.tokensUsed;
+
+      let sent = false;
+
+      if (channel === "email" && lead.email) {
+        const emailResult = await sendEmail({
+          to: lead.email,
+          subject: followUp.data.subject || "Seguito alla mia proposta",
+          body: followUp.data.body,
+          from: emailFrom,
+        });
+        sent = emailResult.success;
+        if (!sent) results.errors.push(`Follow-up email ${lead.companyName}: ${emailResult.error}`);
+      } else if (channel === "whatsapp" && lead.phone) {
+        if (isWhatsAppConfigured()) {
+          const waResult = await sendWhatsAppText(lead.phone, followUp.data.body);
+          sent = waResult.success;
+          if (!sent) results.errors.push(`Follow-up WA ${lead.companyName}: ${waResult.error}`);
+        }
+      }
+
+      if (sent) {
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: {
+            followUpCount: followUpNumber,
+            lastContactedAt: new Date(),
+            nextFollowUp: followUpNumber < 2 ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) : null,
+          },
+        });
+
+        await prisma.activityLog.create({
+          data: {
+            leadId: lead.id,
+            campaignId: lead.campaignId,
+            type: "send",
+            message: `🔄 Follow-up #${followUpNumber} ${channel === "email" ? "📧" : "📱"} inviato a ${lead.companyName}`,
+            metadata: JSON.stringify({ followUpNumber, channel, tokensUsed: followUp.tokensUsed }),
+          },
+        });
+
+        results.followUpsSent++;
+      } else {
+        results.followUpsFailed++;
+      }
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      results.errors.push(`Follow-up ${lead.companyName}: ${errMsg}`);
+      results.followUpsFailed++;
+    }
+  }
+
+  return results;
 }

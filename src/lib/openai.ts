@@ -403,3 +403,103 @@ Suggerisci 5 nuove città italiane con alto potenziale per questo settore.`;
     { temperature: 0.6, maxTokens: 600 }
   );
 }
+
+// ─── 7. AI WhatsApp Reply Classification ───────────────────────────────
+export interface ReplyClassification {
+  dealStage: "negotiating" | "won" | "lost" | "replied";
+  confidence: "alta" | "media" | "bassa";
+  summary: string;
+  suggestedNextAction: string;
+}
+
+export async function classifyWhatsAppReply(input: {
+  messageText: string;
+  companyName: string;
+  sector: string | null;
+  previousContext?: string | null;
+}): Promise<AiResult<ReplyClassification>> {
+  const systemPrompt = `Sei un assistente commerciale per Bitora (agenzia digitale italiana).
+Analizza il messaggio WhatsApp ricevuto da un potenziale cliente e classifica la sua intenzione.
+
+Rispondi SOLO con un JSON valido:
+{
+  "dealStage": "negotiating" | "won" | "lost" | "replied",
+  "confidence": "alta" | "media" | "bassa",
+  "summary": "breve riassunto del messaggio (max 100 char)",
+  "suggestedNextAction": "cosa fare dopo (max 150 char)"
+}
+
+Regole:
+- "negotiating": il cliente mostra interesse, chiede info, prezzi, preventivo, vuole sapere di più
+- "won": il cliente accetta esplicitamente, vuole procedere, conferma l'ordine
+- "lost": il cliente rifiuta chiaramente, dice no grazie, non interessato, chiede di non essere contattato
+- "replied": messaggio ambiguo o irrilevante (saluto generico, emoji, domanda non correlata)
+
+NON essere troppo aggressivo nella classificazione. Se in dubbio, usa "replied".`;
+
+  const userPrompt = `Azienda: ${input.companyName}
+Settore: ${input.sector || "Non specificato"}
+${input.previousContext ? `Contesto precedente: ${input.previousContext}\n` : ""}
+Messaggio ricevuto:
+"${input.messageText}"`;
+
+  return callGpt<ReplyClassification>(
+    systemPrompt,
+    userPrompt,
+    (text) => {
+      const cleaned = text.replace(/```json\n?|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      return {
+        dealStage: ["negotiating", "won", "lost", "replied"].includes(parsed.dealStage) ? parsed.dealStage : "replied",
+        confidence: parsed.confidence || "bassa",
+        summary: parsed.summary || "",
+        suggestedNextAction: parsed.suggestedNextAction || "",
+      };
+    },
+    { temperature: 0.3, maxTokens: 200 }
+  );
+}
+
+// ─── 8. AI Follow-up Message Generation ────────────────────────────────
+export async function generateFollowUpMessage(input: {
+  companyName: string;
+  contactName: string | null;
+  sector: string | null;
+  originalMessage: string;
+  followUpNumber: number;
+  channel: "email" | "whatsapp";
+}): Promise<AiResult<{ subject?: string; body: string }>> {
+  const systemPrompt = `Sei Denis di Bitora (agenzia digitale per PMI italiane).
+Genera un messaggio di follow-up ${input.channel === "email" ? "email" : "WhatsApp"} breve e non aggressivo.
+
+Regole IMPORTANTI:
+- Sii cordiale e professionale, MAI insistente o spam
+- Il follow-up deve aggiungere valore (suggerimento, dato utile, domanda pertinente)
+- Se è WhatsApp: max 3-4 righe, tono informale ma professionale
+- Se è email: oggetto breve + corpo max 5-6 righe
+- NON ripetere lo stesso messaggio originale
+- Follow-up #1: leggero reminder con valore aggiunto
+- Follow-up #2: ultimo messaggio, offri aiuto e chiudi gentilmente
+${input.channel === "email" ? '\nFormato: "Oggetto: ...\n\n[corpo email]"' : "\nFormato: solo il testo del messaggio WhatsApp"}`;
+
+  const userPrompt = `Azienda: ${input.companyName}
+Referente: ${input.contactName || "Titolare"}
+Settore: ${input.sector || "Non specificato"}
+Follow-up numero: ${input.followUpNumber} di 2 massimo
+Messaggio originale inviato: "${input.originalMessage.substring(0, 300)}"`;
+
+  return callGpt<{ subject?: string; body: string }>(
+    systemPrompt,
+    userPrompt,
+    (text) => {
+      if (input.channel === "email") {
+        const subjectMatch = text.match(/^Oggetto:\s*(.+)/m);
+        const subject = subjectMatch ? subjectMatch[1].trim() : "Seguito alla mia proposta";
+        const body = text.replace(/^Oggetto:\s*.+\n*/m, "").trim();
+        return { subject, body };
+      }
+      return { body: text.trim() };
+    },
+    { temperature: 0.8, maxTokens: 300 }
+  );
+}
