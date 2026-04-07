@@ -202,6 +202,123 @@ async function enrichLeadEmail(lead: { id: number; companyName: string; website:
   return discoveredEmail;
 }
 
+// ─── Mobile phone extraction from websites ─────────────────────────────
+// Italian mobile numbers: +39 3xx, 3xx (cellulare). Landlines start with 0.
+const PHONE_REGEX = /(?:\+39\s?)?(?:3\d{2}[\s./\-]?\d{3}[\s./\-]?\d{4}|3\d{2}[\s./\-]?\d{6,7})/g;
+const PHONE_BLACKLIST = ["3000000000", "3333333333", "3123456789", "3001234567"];
+
+function normalizePhone(raw: string): string | null {
+  // Strip everything except digits and leading +
+  const digits = raw.replace(/[^\d+]/g, "");
+  let normalized = digits;
+
+  // Normalize +39 prefix
+  if (normalized.startsWith("+39")) normalized = normalized.slice(3);
+  if (normalized.startsWith("0039")) normalized = normalized.slice(4);
+
+  // Must start with 3 (Italian mobile) and be 9-10 digits
+  if (!/^3\d{8,9}$/.test(normalized)) return null;
+  if (PHONE_BLACKLIST.includes(normalized)) return null;
+
+  return `+39${normalized}`;
+}
+
+function rankPhone(phone: string, existingPhone: string | null): number {
+  let score = 0;
+  // Prefer numbers we don't already have
+  if (existingPhone && phone === existingPhone) score -= 5;
+  // Prefer 10-digit numbers (standard Italian mobile: 3xx xxx xxxx)
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 12) score += 2; // +39 + 10 digits = 12 with country code stripped = standard
+  return score;
+}
+
+async function findMobilePhoneFromWebsite(website: string): Promise<string | null> {
+  const domain = extractDomain(website);
+  if (!domain) return null;
+
+  const baseUrl = website.startsWith("http") ? website : `https://${website}`;
+  const visited = new Set<string>();
+  const queue = [baseUrl];
+  const found = new Set<string>();
+
+  while (queue.length > 0 && visited.size < 4) {
+    const currentUrl = queue.shift();
+    if (!currentUrl || visited.has(currentUrl)) continue;
+    visited.add(currentUrl);
+
+    const html = await fetchPage(currentUrl);
+    if (!html) continue;
+
+    // Extract from tel: links (most reliable source)
+    const $ = cheerio.load(html);
+    $("a[href^='tel:']").each((_, element) => {
+      const href = $(element).attr("href") || "";
+      const phone = normalizePhone(href.replace(/^tel:/, ""));
+      if (phone) found.add(phone);
+    });
+
+    // Extract from visible text via regex
+    for (const match of html.matchAll(PHONE_REGEX)) {
+      const phone = normalizePhone(match[0]);
+      if (phone) found.add(phone);
+    }
+
+    // Follow contact/about links to find more numbers
+    $("a[href]").each((_, element) => {
+      if (queue.length + visited.size >= 6) return;
+      const href = $(element).attr("href");
+      if (!href) return;
+      const label = ($(element).text() || href).toLowerCase();
+      if (!/(contact|contatt|chi-siamo|about|studio|azienda|info|dove.siamo)/.test(label)) return;
+      try {
+        const nextUrl = new URL(href, currentUrl);
+        if (nextUrl.hostname.replace(/^www\./, "") !== domain) return;
+        if (!visited.has(nextUrl.toString())) queue.push(nextUrl.toString());
+      } catch {
+        // Ignore malformed links.
+      }
+    });
+  }
+
+  if (found.size === 0) return null;
+
+  // Rank and return best mobile number
+  const ranked = Array.from(found).sort((a, b) => rankPhone(b, null) - rankPhone(a, null));
+  return ranked[0] || null;
+}
+
+async function enrichLeadPhone(lead: { id: number; companyName: string; website: string | null; phone: string | null; campaignId: number | null }): Promise<string | null> {
+  if (!lead.website) return lead.phone || null;
+
+  // Check if existing phone is already a mobile number
+  if (lead.phone) {
+    const normalized = normalizePhone(lead.phone);
+    if (normalized) return normalized; // Already a mobile number
+  }
+
+  // Try to find a mobile number from the website
+  const discoveredPhone = await findMobilePhoneFromWebsite(lead.website);
+  if (!discoveredPhone) return lead.phone || null;
+
+  // Update the lead with the mobile number (prefer mobile over landline)
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { phone: discoveredPhone },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      leadId: lead.id,
+      campaignId: lead.campaignId,
+      type: "analyze",
+      message: `📱 Cellulare trovato per ${lead.companyName}: ${discoveredPhone}${lead.phone ? ` (sostituisce fisso ${lead.phone})` : ""}`,
+    },
+  });
+
+  return discoveredPhone;
+}
+
 export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}): Promise<DailyWorkerResult> {
   const hasCampaignFilter = Array.isArray(input.campaignIds);
   const targetCampaignIds = Array.isArray(input.campaignIds)
@@ -394,6 +511,7 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
       for (const lead of pendingLeads) {
         try {
           const leadEmail = await enrichLeadEmail(lead);
+          await enrichLeadPhone(lead);
 
           if (!lead.website) {
             await prisma.analysis.create({
@@ -564,6 +682,7 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
         if (!analysis) continue;
 
         const leadEmail = await enrichLeadEmail(lead);
+        await enrichLeadPhone(lead);
 
         const { problem, service } = mapIssuesToProblemString({
           performanceScore: analysis.performanceScore,
@@ -919,6 +1038,7 @@ export async function runLeadBackfillWorker(): Promise<BackfillWorkerResult> {
         try {
           const previousEmail = lead.email;
           const leadEmail = await enrichLeadEmail(lead);
+          await enrichLeadPhone(lead);
           if (!previousEmail && leadEmail) {
             results.emailEnriched++;
           }
@@ -1090,6 +1210,7 @@ export async function runLeadBackfillWorker(): Promise<BackfillWorkerResult> {
 
           const previousEmail = lead.email;
           const leadEmail = await enrichLeadEmail(lead);
+          await enrichLeadPhone(lead);
           if (!previousEmail && leadEmail) {
             results.emailEnriched++;
           }

@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
 
   // 0% - Start
   await log(campaignId, "scrape_start", `Scraping avviato per "${query}"`, 0);
+  console.log(`[Scraper] Starting scrape for campaign ${campaignId}: "${query}"`);
 
   let allLeads: Array<{
     companyName: string;

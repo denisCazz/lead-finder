@@ -166,41 +166,23 @@ export default function LogsPage() {
         ))}
       </div>
 
-      {/* Campaign pill filters */}
-      {campaigns.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            onClick={() => setSelectedCampaign(null)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              selectedCampaign === null
-                ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
-                : "bg-[var(--muted)] text-[var(--muted-foreground)]"
-            }`}
-          >
-            Tutte
-          </button>
-          {campaigns.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedCampaign(selectedCampaign === c.id ? null : c.id)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                selectedCampaign === c.id
-                  ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
-                  : "bg-[var(--muted)] text-[var(--muted-foreground)]"
-              }`}
-            >
-              {c.name}
-              {c.status === "active" && (
-                <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-green-400 inline-block align-middle" />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Type filter + search row */}
+      {/* Filters row: campaign + type + search */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-4">
-        <div className="flex gap-1 bg-[var(--muted)] rounded-lg p-1">
+        {campaigns.length > 0 && (
+          <select
+            value={selectedCampaign ?? ""}
+            onChange={(e) => setSelectedCampaign(e.target.value ? Number(e.target.value) : null)}
+            className="px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] text-sm shrink-0"
+          >
+            <option value="">Tutte le campagne</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} {c.status === "active" ? "●" : ""}
+              </option>
+            ))}
+          </select>
+        )}
+        <div className="flex gap-1 bg-[var(--muted)] rounded-lg p-1 shrink-0">
           {TYPE_FILTERS.map((f) => (
             <button
               key={f.value}
@@ -226,7 +208,7 @@ export default function LogsPage() {
           />
         </div>
         {lastRefresh && (
-          <span className="text-xs text-[var(--muted-foreground)] ml-auto">
+          <span className="text-xs text-[var(--muted-foreground)] ml-auto shrink-0">
             Agg. {timeAgo(lastRefresh)}
           </span>
         )}
