@@ -115,12 +115,14 @@ export default function WhatsAppChatPage() {
 
   return (
     <div>
-      <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 mb-6">
-        <MessageCircle className="w-7 h-7 sm:w-8 sm:h-8 text-green-500" />
-        Chat WhatsApp
-      </h1>
+      <div className="page-header mb-4">
+        <h1 className="page-title">
+          <MessageCircle className="w-6 h-6 text-green-500" />
+          Chat WhatsApp
+        </h1>
+      </div>
 
-      <div className="flex bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden" style={{ height: "calc(100vh - 180px)", minHeight: "500px" }}>
+      <div className="flex section-card !p-0 overflow-hidden" style={{ height: "calc(100vh - 180px)", minHeight: "500px" }}>
         {/* ── Chat list (left) ── */}
         <div className={`w-full sm:w-80 sm:min-w-[320px] border-r border-[var(--border)] flex flex-col ${selectedChatId ? "hidden sm:flex" : "flex"}`}>
           <div className="p-3 border-b border-[var(--border)]">
@@ -244,7 +246,7 @@ export default function WhatsAppChatPage() {
                   }}
                   placeholder="Scrivi un messaggio..."
                   rows={1}
-                  className="flex-1 px-3 py-2 rounded-xl bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm resize-none max-h-32"
+                  className="input flex-1 resize-none max-h-32 !rounded-xl"
                   style={{ minHeight: "40px" }}
                 />
                 <button

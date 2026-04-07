@@ -114,22 +114,20 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 mb-6">
-        <Settings className="w-7 h-7 sm:w-8 sm:h-8 text-[var(--primary)]" />
-        Impostazioni
-      </h1>
+      <div className="page-header mb-6">
+        <h1 className="page-title">
+          <Settings className="w-6 h-6 text-[var(--primary)]" />
+          Impostazioni
+        </h1>
+      </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-[var(--muted)] rounded-lg p-1 overflow-x-auto max-w-full sm:max-w-lg">
+      <div className="tab-bar w-fit mb-6">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
-                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            }`}
+            className={`tab-btn ${activeTab === tab.id ? "tab-btn-active" : ""}`}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -142,26 +140,26 @@ export default function SettingsPage() {
         {activeTab === "general" && (
           <div className="stack-grid lg:grid-cols-2">
             {/* Email config */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
-              <h2 className="text-lg font-semibold mb-4">Configurazione Email</h2>
+            <div className="section-card">
+              <h2 className="section-title">Configurazione Email</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-[var(--muted-foreground)] mb-1">Email mittente</label>
+                  <label className="input-label">Email mittente</label>
                   <input
                     type="email"
                     value={settings.email_from || ""}
                     onChange={(e) => setSettings({ ...settings, email_from: e.target.value })}
                     placeholder="noreply@bitora.it"
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm"
+                    className="input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted-foreground)] mb-1">Max email al giorno</label>
+                  <label className="input-label">Max email al giorno</label>
                   <input
                     type="number"
-                    value={settings.max_emails_per_day || "20"}
+                    value={settings.max_emails_per_day || "100"}
                     onChange={(e) => setSettings({ ...settings, max_emails_per_day: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm"
+                    className="input"
                   />
                   <p className="text-xs text-[var(--muted-foreground)] mt-1">Usato solo dal worker Invio Mail nei lanci manuali o di debug. L&apos;Automazione Completa invia subito tutte le email approvate dall&apos;AI.</p>
                 </div>
@@ -169,14 +167,14 @@ export default function SettingsPage() {
             </div>
 
             {/* Telegram */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
-              <h2 className="text-lg font-semibold mb-4">Telegram Bot</h2>
+            <div className="section-card">
+              <h2 className="section-title">Telegram Bot</h2>
               <p className="text-sm text-[var(--muted-foreground)] mb-4">
                 Configura TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID nel file .env per ricevere notifiche.
               </p>
               <button
                 onClick={handleTestTelegram}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:opacity-90 text-sm font-medium flex items-center gap-2"
+                className="btn btn-primary"
               >
                 <TestTube className="w-4 h-4" /> Test Notifica Telegram
               </button>
@@ -188,8 +186,8 @@ export default function SettingsPage() {
             </div>
 
             {/* WhatsApp Business */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <div className="section-card">
+              <h2 className="section-title flex items-center gap-2">
                 📱 WhatsApp Business API
               </h2>
               <p className="text-sm text-[var(--muted-foreground)] mb-4">
@@ -217,8 +215,8 @@ export default function SettingsPage() {
             </div>
 
             {/* CSV Import */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
-              <h2 className="text-lg font-semibold mb-4">Import CSV</h2>
+            <div className="section-card">
+              <h2 className="section-title">Import CSV</h2>
               <p className="text-sm text-[var(--muted-foreground)] mb-4">
                 Colonne: company/azienda, contact/referente, email, phone/telefono, website/sito, sector/settore, city/città, region/regione.
               </p>
@@ -232,7 +230,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleCsvImport}
                   disabled={!csvFile || importing}
-                  className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+                  className="btn btn-primary disabled:opacity-50"
                 >
                   <Upload className="w-4 h-4" />
                   {importing ? "Importazione..." : "Importa"}
@@ -254,12 +252,12 @@ export default function SettingsPage() {
             </div>
 
             {PROMPT_FIELDS.map((field) => (
-              <div key={field.key} className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+              <div key={field.key} className="section-card">
                 <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-lg font-semibold">{field.label}</h2>
+                  <h2 className="section-title !mb-0">{field.label}</h2>
                   <button
                     onClick={() => handleResetPrompt(field.key)}
-                    className="px-3 py-1 text-xs text-[var(--muted-foreground)] border border-[var(--border)] rounded-lg hover:bg-[var(--muted)] flex items-center gap-1"
+                    className="btn btn-ghost btn-sm"
                     title="Ripristina il prompt predefinito"
                   >
                     <RotateCcw className="w-3 h-3" /> Default
@@ -285,9 +283,9 @@ export default function SettingsPage() {
         {activeTab === "automation" && (
           <div className="space-y-6">
             {/* ── Loop Continuo ── */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
+            <div className="section-card">
               <div className="flex items-center justify-between mb-2 gap-4">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
+                <h2 className="section-title !mb-0 flex items-center gap-2">
                   ♻️ Automazione Completa
                   <span className="text-xs font-normal text-[var(--muted-foreground)] bg-[var(--muted)] px-2 py-0.5 rounded-full">consigliato</span>
                 </h2>
@@ -379,8 +377,8 @@ export default function SettingsPage() {
             </div>
 
             {/* ── Configurazione Generale ── */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 sm:p-6">
-              <h2 className="text-lg font-semibold mb-4">Configurazione Generale</h2>
+            <div className="section-card">
+              <h2 className="section-title">Configurazione Generale</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm text-[var(--muted-foreground)] mb-1">App URL</label>
@@ -405,8 +403,8 @@ export default function SettingsPage() {
             </div>
 
             {/* ── Istruzioni cron-job.org ── */}
-            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
-              <h2 className="text-lg font-semibold mb-4">Configurazione cron-job.org</h2>
+            <div className="section-card">
+              <h2 className="section-title">Configurazione cron-job.org</h2>
               <ol className="text-sm text-[var(--muted-foreground)] list-decimal list-inside space-y-2">
                 <li>Vai su <a href="https://cron-job.org" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">cron-job.org</a> → <strong>Create Cronjob</strong></li>
                 <li>Job consigliato unico: <strong>Automazione Completa</strong> → URL <code className="bg-[var(--muted)] px-1 rounded">/api/cron/continuous</code>, schedule suggerito <code className="bg-[var(--muted)] px-1 rounded">5 * * * *</code></li>
@@ -425,7 +423,7 @@ export default function SettingsPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-6 py-2.5 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 font-medium flex items-center gap-2"
+            className="btn btn-primary"
           >
             <Save className="w-4 h-4" />
             {saving ? "Salvataggio..." : "Salva Impostazioni"}

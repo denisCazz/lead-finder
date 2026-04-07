@@ -33,6 +33,17 @@ interface Lead {
   createdAt: string;
 }
 
+const STATUS_BADGE: Record<string, string> = {
+  new: "badge-blue",
+  analyzed: "badge-yellow",
+  contacted: "badge-green",
+  replied: "badge-emerald",
+  rejected: "badge-gray",
+  negotiating: "badge-purple",
+  won: "badge-green",
+  lost: "badge-red",
+};
+
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,12 +67,7 @@ export default function LeadsPage() {
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: perPage.toString(),
-      sortBy,
-      sortDir,
-    });
+    const params = new URLSearchParams({ page: page.toString(), limit: perPage.toString(), sortBy, sortDir });
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
     if (sectorFilter) params.set("sector", sectorFilter);
@@ -69,7 +75,6 @@ export default function LeadsPage() {
     if (scoreMin) params.set("scoreMin", scoreMin);
     if (scoreMax) params.set("scoreMax", scoreMax);
     if (hasEmail) params.set("hasEmail", hasEmail);
-
     const res = await fetch(`/api/leads?${params}`);
     const data = await res.json();
     setLeads(data.leads || []);
@@ -79,53 +84,23 @@ export default function LeadsPage() {
     setLoading(false);
   }, [page, search, statusFilter, sectorFilter, cityFilter, scoreMin, scoreMax, hasEmail, sortBy, sortDir]);
 
-  useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
+  useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
-  // Debounced search
   const [searchInput, setSearchInput] = useState("");
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(searchInput);
-      setPage(1);
-    }, 400);
+    const timer = setTimeout(() => { setSearch(searchInput); setPage(1); }, 400);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  async function handleAnalyze(leadId: number) {
-    await fetch(`/api/analyze/${leadId}`, { method: "POST" });
-    fetchLeads();
-  }
+  async function handleAnalyze(leadId: number) { await fetch(`/api/analyze/${leadId}`, { method: "POST" }); fetchLeads(); }
+  async function handleGenerate(leadId: number) { await fetch(`/api/messages/generate/${leadId}`, { method: "POST" }); fetchLeads(); }
+  async function handleDelete(leadId: number) { if (!confirm("Eliminare questo lead?")) return; await fetch(`/api/leads/${leadId}`, { method: "DELETE" }); fetchLeads(); }
 
-  async function handleGenerate(leadId: number) {
-    await fetch(`/api/messages/generate/${leadId}`, { method: "POST" });
-    fetchLeads();
-  }
-
-  async function handleDelete(leadId: number) {
-    if (!confirm("Eliminare questo lead?")) return;
-    await fetch(`/api/leads/${leadId}`, { method: "DELETE" });
-    fetchLeads();
-  }
-
-  function clearFilters() {
-    setStatusFilter("");
-    setSectorFilter("");
-    setCityFilter("");
-    setScoreMin("");
-    setScoreMax("");
-    setHasEmail("");
-    setPage(1);
-  }
+  function clearFilters() { setStatusFilter(""); setSectorFilter(""); setCityFilter(""); setScoreMin(""); setScoreMax(""); setHasEmail(""); setPage(1); }
 
   function toggleSort(field: string) {
-    if (sortBy === field) {
-      setSortDir(sortDir === "desc" ? "asc" : "desc");
-    } else {
-      setSortBy(field);
-      setSortDir("desc");
-    }
+    if (sortBy === field) setSortDir(sortDir === "desc" ? "asc" : "desc");
+    else { setSortBy(field); setSortDir("desc"); }
     setPage(1);
   }
 
@@ -133,67 +108,48 @@ export default function LeadsPage() {
 
   return (
     <div>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-            <Users className="w-7 h-7 sm:w-8 sm:h-8 text-[var(--primary)]" />
-            Leads
-          </h1>
-          <p className="text-[var(--muted-foreground)] mt-1 text-sm">{total} lead trovati</p>
+          <h1 className="page-title"><Users className="w-6 h-6 text-[var(--primary)]" /> Leads</h1>
+          <p className="page-subtitle">{total} lead trovati</p>
         </div>
-        <Link
-          href="/jobs"
-          className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm font-medium text-center"
-        >
-          Lancia job
-        </Link>
+        <Link href="/jobs" className="btn btn-primary">Lancia job</Link>
       </div>
 
       {/* Search + filter toggle */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 mb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)]" />
           <input
             type="text"
-            placeholder="Cerca azienda, settore, città, email, telefono..."
+            placeholder="Cerca azienda, settore, città, email..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
+            className="input pl-10"
           />
         </div>
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition shrink-0 ${
-            showFilters || activeFilterCount > 0
-              ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]"
-              : "border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
-          }`}
+          className={`btn ${showFilters || activeFilterCount > 0 ? "btn-primary" : "btn-outline"}`}
         >
           <SlidersHorizontal className="w-4 h-4" />
           Filtri{activeFilterCount > 0 && ` (${activeFilterCount})`}
         </button>
       </div>
 
-      {/* Advanced filters panel */}
+      {/* Advanced filters */}
       {showFilters && (
-        <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-          <div className="flex items-center justify-between mb-4">
+        <div className="section-card p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-medium">Filtri avanzati</p>
             {activeFilterCount > 0 && (
-              <button onClick={clearFilters} className="inline-flex items-center gap-1 text-xs text-[var(--primary)] hover:underline">
-                <X className="w-3 h-3" />
-                Resetta filtri
-              </button>
+              <button onClick={clearFilters} className="btn btn-ghost btn-sm"><X className="w-3 h-3" /> Resetta</button>
             )}
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <div>
-              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Stato</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm"
-              >
+              <label className="input-label">Stato</label>
+              <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="input">
                 <option value="">Tutti</option>
                 <option value="new">Nuovo</option>
                 <option value="analyzed">Analizzato</option>
@@ -203,62 +159,30 @@ export default function LeadsPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Settore</label>
-              <select
-                value={sectorFilter}
-                onChange={(e) => { setSectorFilter(e.target.value); setPage(1); }}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm"
-              >
-                <option value="">Tutti i settori</option>
-                {sectors.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
+              <label className="input-label">Settore</label>
+              <select value={sectorFilter} onChange={(e) => { setSectorFilter(e.target.value); setPage(1); }} className="input">
+                <option value="">Tutti</option>
+                {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Città</label>
-              <select
-                value={cityFilter}
-                onChange={(e) => { setCityFilter(e.target.value); setPage(1); }}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm"
-              >
-                <option value="">Tutte le città</option>
-                {cities.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
+              <label className="input-label">Città</label>
+              <select value={cityFilter} onChange={(e) => { setCityFilter(e.target.value); setPage(1); }} className="input">
+                <option value="">Tutte</option>
+                {cities.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Score min</label>
-              <input
-                type="number"
-                value={scoreMin}
-                onChange={(e) => { setScoreMin(e.target.value); setPage(1); }}
-                placeholder="0"
-                min="0"
-                max="100"
-                className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm"
-              />
+              <label className="input-label">Score min</label>
+              <input type="number" value={scoreMin} onChange={(e) => { setScoreMin(e.target.value); setPage(1); }} placeholder="0" min="0" max="100" className="input" />
             </div>
             <div>
-              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Score max</label>
-              <input
-                type="number"
-                value={scoreMax}
-                onChange={(e) => { setScoreMax(e.target.value); setPage(1); }}
-                placeholder="100"
-                min="0"
-                max="100"
-                className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm"
-              />
+              <label className="input-label">Score max</label>
+              <input type="number" value={scoreMax} onChange={(e) => { setScoreMax(e.target.value); setPage(1); }} placeholder="100" min="0" max="100" className="input" />
             </div>
             <div>
-              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Contatto email</label>
-              <select
-                value={hasEmail}
-                onChange={(e) => { setHasEmail(e.target.value); setPage(1); }}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm"
-              >
+              <label className="input-label">Email</label>
+              <select value={hasEmail} onChange={(e) => { setHasEmail(e.target.value); setPage(1); }} className="input">
                 <option value="">Tutti</option>
                 <option value="yes">Con email</option>
                 <option value="no">Senza email</option>
@@ -268,299 +192,118 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {/* Quick filter chips */}
+      {/* Quick filters */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <button
-          onClick={() => { setScoreMin("70"); setScoreMax(""); setStatusFilter(""); setHasEmail(""); setPage(1); setShowFilters(true); }}
-          className={`text-xs px-3 py-1.5 rounded-full border transition ${
-            scoreMin === "70" && !scoreMax && !statusFilter ? "border-orange-500/50 bg-orange-500/10 text-orange-300" : "border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-          }`}
-        >
-          Hot leads (score 70+)
-        </button>
-        <button
-          onClick={() => { setHasEmail("yes"); setStatusFilter("analyzed"); setScoreMin(""); setScoreMax(""); setPage(1); setShowFilters(true); }}
-          className={`text-xs px-3 py-1.5 rounded-full border transition ${
-            hasEmail === "yes" && statusFilter === "analyzed" ? "border-green-500/50 bg-green-500/10 text-green-300" : "border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-          }`}
-        >
-          Pronti da contattare
-        </button>
-        <button
-          onClick={() => { setStatusFilter("new"); setScoreMin(""); setScoreMax(""); setHasEmail(""); setPage(1); setShowFilters(true); }}
-          className={`text-xs px-3 py-1.5 rounded-full border transition ${
-            statusFilter === "new" && !scoreMin && !hasEmail ? "border-blue-500/50 bg-blue-500/10 text-blue-300" : "border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-          }`}
-        >
-          Da analizzare
-        </button>
-        <button
-          onClick={() => { setHasEmail("no"); setStatusFilter(""); setScoreMin(""); setScoreMax(""); setPage(1); setShowFilters(true); }}
-          className={`text-xs px-3 py-1.5 rounded-full border transition ${
-            hasEmail === "no" && !statusFilter ? "border-amber-500/50 bg-amber-500/10 text-amber-300" : "border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-          }`}
-        >
-          Senza email
-        </button>
-        {activeFilterCount > 0 && (
-          <button
-            onClick={clearFilters}
-            className="text-xs px-3 py-1.5 rounded-full border border-red-500/30 text-red-300 hover:bg-red-500/10 transition"
-          >
-            Resetta tutto
-          </button>
-        )}
+        {[
+          { label: "Hot leads (70+)", fn: () => { setScoreMin("70"); setScoreMax(""); setStatusFilter(""); setHasEmail(""); setPage(1); setShowFilters(true); }, active: scoreMin === "70" && !scoreMax && !statusFilter },
+          { label: "Pronti da contattare", fn: () => { setHasEmail("yes"); setStatusFilter("analyzed"); setScoreMin(""); setScoreMax(""); setPage(1); setShowFilters(true); }, active: hasEmail === "yes" && statusFilter === "analyzed" },
+          { label: "Da analizzare", fn: () => { setStatusFilter("new"); setScoreMin(""); setScoreMax(""); setHasEmail(""); setPage(1); setShowFilters(true); }, active: statusFilter === "new" && !scoreMin && !hasEmail },
+          { label: "Senza email", fn: () => { setHasEmail("no"); setStatusFilter(""); setScoreMin(""); setScoreMax(""); setPage(1); setShowFilters(true); }, active: hasEmail === "no" && !statusFilter },
+        ].map((chip) => (
+          <button key={chip.label} onClick={chip.fn}
+            className={`badge cursor-pointer ${chip.active ? "badge-blue" : "badge-gray hover:bg-[var(--muted)]"}`}
+          >{chip.label}</button>
+        ))}
+        {activeFilterCount > 0 && <button onClick={clearFilters} className="badge badge-red cursor-pointer">Resetta tutto</button>}
       </div>
 
       {/* Table */}
-      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-[var(--muted-foreground)]">Caricamento...</div>
-        ) : leads.length === 0 ? (
-          <div className="p-8 text-center text-[var(--muted-foreground)]">
-            <p className="text-lg font-medium mb-1">Nessun lead trovato</p>
-            <p className="text-sm">Prova a modificare i filtri o ad avviare un nuovo job di ricerca.</p>
-          </div>
-        ) : (
-          <>
-            {/* Mobile cards */}
-            <div className="mobile-card-list p-3 md:hidden">
-              {leads.map((lead) => (
-                <div key={lead.id} className="surface-card p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link href={`/leads/${lead.id}`} className="font-semibold text-[var(--primary)] hover:underline">
-                          {lead.companyName}
-                        </Link>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          lead.status === "new" ? "bg-blue-500/20 text-blue-400" :
-                          lead.status === "analyzed" ? "bg-yellow-500/20 text-yellow-400" :
-                          lead.status === "contacted" ? "bg-green-500/20 text-green-400" :
-                          lead.status === "replied" ? "bg-emerald-500/20 text-emerald-400" :
-                          "bg-gray-500/20 text-gray-400"
-                        }`}>
-                          {lead.status}
-                        </span>
-                      </div>
-                      <div className="mt-2 space-y-1 text-xs text-[var(--muted-foreground)]">
-                        <p>{lead.sector || "Settore non definito"}</p>
-                        <p>{lead.city || "Città non definita"}</p>
-                        <div className="flex flex-col gap-1 mt-1">
-                          {lead.email && (
-                            <span className="inline-flex items-center gap-1 text-green-400">
-                              <Mail className="w-3 h-3" /> {lead.email}
-                            </span>
-                          )}
-                          {lead.phone && (
-                            <span className="inline-flex items-center gap-1 text-sky-400">
-                              <Phone className="w-3 h-3" /> {lead.phone}
-                            </span>
-                          )}
-                          {!lead.email && !lead.phone && <span>Nessun contatto</span>}
-                        </div>
-                      </div>
+      {loading ? (
+        <div className="empty-state"><p>Caricamento...</p></div>
+      ) : leads.length === 0 ? (
+        <div className="section-card empty-state">
+          <Users className="w-12 h-12" />
+          <p>Nessun lead trovato</p>
+          <p>Modifica i filtri o lancia un job di ricerca.</p>
+        </div>
+      ) : (
+        <>
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {leads.map((lead) => (
+              <div key={lead.id} className="section-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link href={`/leads/${lead.id}`} className="font-semibold text-[var(--primary)] hover:underline">{lead.companyName}</Link>
+                      <span className={`badge ${STATUS_BADGE[lead.status] || "badge-gray"}`}>{lead.status}</span>
                     </div>
-                    <div className="text-right">
-                      <p className={`text-lg font-bold ${
-                        lead.score >= 70 ? "text-orange-400" : lead.score >= 40 ? "text-yellow-400" : "text-slate-400"
-                      }`}>
-                        {lead.score}
-                      </p>
+                    <div className="mt-1.5 text-xs text-[var(--muted-foreground)] space-y-1">
+                      <p>{lead.sector || "—"} · {lead.city || "—"}</p>
+                      {lead.email && <p className="flex items-center gap-1 text-emerald-400"><Mail className="w-3 h-3" /> {lead.email}</p>}
+                      {lead.phone && <p className="flex items-center gap-1 text-sky-400"><Phone className="w-3 h-3" /> {lead.phone}</p>}
+                    </div>
+                  </div>
+                  <span className={`text-lg font-bold ${lead.score >= 70 ? "text-orange-400" : lead.score >= 40 ? "text-yellow-400" : "text-slate-400"}`}>{lead.score}</span>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  {lead.status === "new" && <button onClick={() => handleAnalyze(lead.id)} className="btn btn-outline btn-sm"><BarChart3 className="w-3.5 h-3.5" /> Analizza</button>}
+                  {(lead.status === "analyzed" || lead.status === "new") && <button onClick={() => handleGenerate(lead.id)} className="btn btn-outline btn-sm"><Sparkles className="w-3.5 h-3.5" /> Genera</button>}
+                  <button onClick={() => handleDelete(lead.id)} className="btn btn-danger btn-sm"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><button onClick={() => toggleSort("companyName")} className="inline-flex items-center gap-1 hover:text-[var(--foreground)]">Azienda <ArrowUpDown className="w-3 h-3" /></button></th>
+                  <th>Settore</th>
+                  <th>Città</th>
+                  <th>Contatti</th>
+                  <th><button onClick={() => toggleSort("score")} className="inline-flex items-center gap-1 hover:text-[var(--foreground)]">Score <ArrowUpDown className="w-3 h-3" /></button></th>
+                  <th>Stato</th>
+                  <th>Azioni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.map((lead) => (
+                  <tr key={lead.id}>
+                    <td>
+                      <Link href={`/leads/${lead.id}`} className="text-[var(--primary)] hover:underline font-medium">{lead.companyName}</Link>
                       {lead.website && (
-                        <a
-                          href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                        >
-                          <ExternalLink className="w-3 h-3" /> sito
+                        <a href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="ml-1.5 inline-block">
+                          <ExternalLink className="w-3 h-3 text-[var(--muted-foreground)]" />
                         </a>
                       )}
-                    </div>
-                  </div>
-                  <div className="toolbar-wrap mt-4">
-                    {lead.status === "new" && (
-                      <button
-                        onClick={() => handleAnalyze(lead.id)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--muted)] px-3 py-2 text-xs"
-                      >
-                        <BarChart3 className="w-4 h-4" /> Analizza
-                      </button>
-                    )}
-                    {(lead.status === "analyzed" || lead.status === "new") && (
-                      <button
-                        onClick={() => handleGenerate(lead.id)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--muted)] px-3 py-2 text-xs"
-                      >
-                        <Sparkles className="w-4 h-4" /> Genera testo
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleDelete(lead.id)}
-                      className="inline-flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300"
-                    >
-                      <Trash2 className="w-4 h-4" /> Elimina
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Desktop table */}
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--muted-foreground)] border-b border-[var(--border)] bg-[var(--muted)]/30">
-                    <th className="px-4 py-3 font-medium">
-                      <button onClick={() => toggleSort("companyName")} className="inline-flex items-center gap-1 hover:text-[var(--foreground)]">
-                        Azienda <ArrowUpDown className="w-3 h-3" />
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 font-medium">Settore</th>
-                    <th className="px-4 py-3 font-medium">Città</th>
-                    <th className="px-4 py-3 font-medium">Contatti</th>
-                    <th className="px-4 py-3 font-medium">
-                      <button onClick={() => toggleSort("score")} className="inline-flex items-center gap-1 hover:text-[var(--foreground)]">
-                        Score <ArrowUpDown className="w-3 h-3" />
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 font-medium">Stato</th>
-                    <th className="px-4 py-3 font-medium">Azioni</th>
+                    </td>
+                    <td className="text-[var(--muted-foreground)]">{lead.sector || "—"}</td>
+                    <td className="text-[var(--muted-foreground)]">{lead.city || "—"}</td>
+                    <td>
+                      <div className="flex flex-col gap-0.5">
+                        {lead.email && <span className="flex items-center gap-1 text-xs text-emerald-400"><Mail className="w-3 h-3" /> {lead.email}</span>}
+                        {lead.phone && <span className="flex items-center gap-1 text-xs text-sky-400"><Phone className="w-3 h-3" /> {lead.phone}</span>}
+                        {!lead.email && !lead.phone && <span className="text-xs text-[var(--muted-foreground)]">—</span>}
+                      </div>
+                    </td>
+                    <td><span className={`font-semibold ${lead.score >= 70 ? "text-orange-400" : lead.score >= 40 ? "text-yellow-400" : "text-slate-400"}`}>{lead.score}</span></td>
+                    <td><span className={`badge ${STATUS_BADGE[lead.status] || "badge-gray"}`}>{lead.status}</span></td>
+                    <td>
+                      <div className="flex items-center gap-1">
+                        {lead.status === "new" && <button onClick={() => handleAnalyze(lead.id)} className="btn btn-ghost btn-sm p-1.5" title="Analizza"><BarChart3 className="w-4 h-4" /></button>}
+                        {(lead.status === "analyzed" || lead.status === "new") && <button onClick={() => handleGenerate(lead.id)} className="btn btn-ghost btn-sm p-1.5" title="Genera"><Sparkles className="w-4 h-4" /></button>}
+                        <button onClick={() => handleDelete(lead.id)} className="btn btn-ghost btn-sm p-1.5 text-red-400" title="Elimina"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {leads.map((lead) => (
-                    <tr key={lead.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)]/20">
-                      <td className="px-4 py-3">
-                        <Link href={`/leads/${lead.id}`} className="text-[var(--primary)] hover:underline font-medium">
-                          {lead.companyName}
-                        </Link>
-                        {lead.website && (
-                          <a
-                            href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-2 inline-block"
-                          >
-                            <ExternalLink className="w-3 h-3 text-[var(--muted-foreground)]" />
-                          </a>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--muted-foreground)]">{lead.sector || "\u2014"}</td>
-                      <td className="px-4 py-3 text-[var(--muted-foreground)]">{lead.city || "\u2014"}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          {lead.email && (
-                            <span className="inline-flex items-center gap-1 text-xs text-green-400">
-                              <Mail className="w-3 h-3" /> {lead.email}
-                            </span>
-                          )}
-                          {lead.phone && (
-                            <span className="inline-flex items-center gap-1 text-xs text-sky-400">
-                              <Phone className="w-3 h-3" /> {lead.phone}
-                            </span>
-                          )}
-                          {!lead.email && !lead.phone && (
-                            <span className="text-xs text-[var(--muted-foreground)]">{"\u2014"}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`font-semibold ${
-                          lead.score >= 70 ? "text-orange-400" : lead.score >= 40 ? "text-yellow-400" : "text-slate-400"
-                        }`}>
-                          {lead.score}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          lead.status === "new" ? "bg-blue-500/20 text-blue-400" :
-                          lead.status === "analyzed" ? "bg-yellow-500/20 text-yellow-400" :
-                          lead.status === "contacted" ? "bg-green-500/20 text-green-400" :
-                          lead.status === "replied" ? "bg-emerald-500/20 text-emerald-400" :
-                          "bg-gray-500/20 text-gray-400"
-                        }`}>
-                          {lead.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          {lead.status === "new" && (
-                            <button
-                              onClick={() => handleAnalyze(lead.id)}
-                              className="p-1.5 rounded hover:bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                              title="Analizza"
-                            >
-                              <BarChart3 className="w-4 h-4" />
-                            </button>
-                          )}
-                          {(lead.status === "analyzed" || lead.status === "new") && (
-                            <button
-                              onClick={() => handleGenerate(lead.id)}
-                              className="p-1.5 rounded hover:bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                              title="Genera messaggio"
-                            >
-                              <Sparkles className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDelete(lead.id)}
-                            className="p-1.5 rounded hover:bg-red-500/20 text-[var(--muted-foreground)] hover:text-red-400"
-                            title="Elimina"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border)]">
-            <p className="text-sm text-[var(--muted-foreground)]">
-              Pagina {page} di {totalPages} ({total} risultati)
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage(1)}
-                disabled={page === 1}
-                className="px-2.5 py-1.5 rounded text-xs hover:bg-[var(--muted)] disabled:opacity-30"
-              >
-                Prima
-              </button>
-              <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="p-1.5 rounded hover:bg-[var(--muted)] disabled:opacity-30"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-sm font-medium px-2">{page}</span>
-              <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="p-1.5 rounded hover:bg-[var(--muted)] disabled:opacity-30"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setPage(totalPages)}
-                disabled={page === totalPages}
-                className="px-2.5 py-1.5 rounded text-xs hover:bg-[var(--muted)] disabled:opacity-30"
-              >
-                Ultima
-              </button>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 mt-6">
+              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="btn btn-outline btn-sm"><ChevronLeft className="w-4 h-4" /> Prec</button>
+              <span className="text-sm text-[var(--muted-foreground)]">{page} / {totalPages}</span>
+              <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="btn btn-outline btn-sm">Succ <ChevronRight className="w-4 h-4" /></button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

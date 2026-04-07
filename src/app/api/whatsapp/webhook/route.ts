@@ -35,25 +35,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  for (const entry of body.entry || []) {
-    for (const change of entry.changes || []) {
-      const value = change.value;
-      if (!value) continue;
+  try {
+    for (const entry of body.entry || []) {
+      for (const change of entry.changes || []) {
+        const value = change.value;
+        if (!value) continue;
 
-      // ── Incoming messages ──
-      if (value.messages) {
-        for (const msg of value.messages) {
-          await handleIncomingMessage(msg, value.contacts?.[0]);
+        // ── Incoming messages ──
+        if (value.messages) {
+          for (const msg of value.messages) {
+            await handleIncomingMessage(msg, value.contacts?.[0]);
+          }
         }
-      }
 
-      // ── Status updates (delivered, read, etc.) ──
-      if (value.statuses) {
-        for (const status of value.statuses) {
-          await handleStatusUpdate(status);
+        // ── Status updates (delivered, read, etc.) ──
+        if (value.statuses) {
+          for (const status of value.statuses) {
+            await handleStatusUpdate(status);
+          }
         }
       }
     }
+  } catch (error) {
+    console.error("[WhatsApp Webhook] Error processing webhook:", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
@@ -155,7 +160,13 @@ async function handleIncomingMessage(
     }
   }
 
-  // Save the message
+  // Save the message (skip if already exists — duplicate webhook call)
+  const existing = await prisma.whatsAppMessage.findFirst({ where: { waId: msg.id } });
+  if (existing) {
+    console.log(`[WhatsApp Webhook] Duplicate message ${msg.id}, skipping`);
+    return;
+  }
+
   await prisma.whatsAppMessage.create({
     data: {
       chatId: chat.id,

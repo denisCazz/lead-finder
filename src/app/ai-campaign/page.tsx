@@ -173,18 +173,18 @@ export default function AiCampaignPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
-          <Bot className="w-7 h-7 sm:w-8 sm:h-8 text-purple-400" />
-          AI Campaign
-        </h1>
-        <p className="text-[var(--muted-foreground)] mt-1 text-sm">
-          Descrivi il target in linguaggio naturale. L&apos;AI pianifica, cerca, analizza e genera email — tutto in autonomia.
-        </p>
+      <div className="page-header mb-6">
+        <div>
+          <h1 className="page-title">
+            <Bot className="w-6 h-6 text-purple-400" />
+            AI Campaign
+          </h1>
+          <p className="page-subtitle">Descrivi il target in linguaggio naturale. L&apos;AI pianifica, cerca, analizza e genera email — tutto in autonomia.</p>
+        </div>
       </div>
 
       {/* Prompt Input */}
-      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6 mb-6">
+      <div className="section-card mb-6">
         <label className="block text-sm font-medium mb-2">Cosa vuoi cercare?</label>
         <div className="flex flex-col sm:flex-row gap-3">
           <textarea
@@ -193,7 +193,7 @@ export default function AiCampaignPage() {
             placeholder="es. Trova ristoranti a Milano che hanno bisogno di un sito web moderno..."
             disabled={running}
             rows={3}
-            className="flex-1 px-4 py-3 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+            className="input flex-1 resize-none"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !running) {
                 e.preventDefault();
@@ -204,7 +204,7 @@ export default function AiCampaignPage() {
           <button
             onClick={handleLaunch}
             disabled={running || !prompt.trim()}
-            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center justify-center gap-2 sm:self-end"
+            className="btn btn-primary sm:self-end"
           >
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             {running ? "In corso..." : "Lancia AI"}
@@ -316,10 +316,10 @@ export default function AiCampaignPage() {
           ].map((stat) => {
             const Icon = stat.icon;
             return (
-              <div key={stat.label} className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4 text-center">
+              <div key={stat.label} className="kpi-card text-center">
                 <Icon className={`w-5 h-5 mx-auto mb-1 ${stat.color}`} />
-                <p className="text-xl font-bold">{stat.value}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">{stat.label}</p>
+                <p className="kpi-value">{stat.value}</p>
+                <p className="kpi-label">{stat.label}</p>
               </div>
             );
           })}
@@ -328,8 +328,8 @@ export default function AiCampaignPage() {
 
       {/* Live Activity Log */}
       {logs.length > 0 && (
-        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
-          <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+        <div className="section-card">
+          <h2 className="section-title flex items-center gap-2">
             <Clock className="w-5 h-5 text-[var(--muted-foreground)]" />
             Log Attività AI
             <span className="text-xs font-normal text-[var(--muted-foreground)]">
@@ -374,19 +374,19 @@ export default function AiCampaignPage() {
         <div className="mt-6 flex flex-wrap gap-3">
           <a
             href="/leads"
-            className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 text-sm font-medium flex items-center gap-2"
+            className="btn btn-primary"
           >
             <Target className="w-4 h-4" /> Vedi Lead
           </a>
           <a
             href="/messages"
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:opacity-90 text-sm font-medium flex items-center gap-2"
+            className="btn btn-success"
           >
             <Mail className="w-4 h-4" /> Vedi Messaggi
           </a>
           <a
             href="/campaigns"
-            className="px-4 py-2 bg-[var(--muted)] text-[var(--foreground)] rounded-lg hover:opacity-90 text-sm font-medium flex items-center gap-2"
+            className="btn btn-ghost"
           >
             <Send className="w-4 h-4" /> Campagne
           </a>

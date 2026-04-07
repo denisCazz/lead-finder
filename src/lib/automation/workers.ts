@@ -883,11 +883,11 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
 
   const autoSendEnabled = settings.auto_send_enabled !== "false";
   if (!autoSendEnabled && !input.forceRun && !sendAll) {
-    return { sent: 0, failed: 0, errors: [], cap: parseInt(settings.max_emails_per_day || "20", 10), sentTodayBefore: 0, sendAll, processed: 0, skipped: true, reason: "auto_send_enabled is false — add ?force=true to override" };
+    return { sent: 0, failed: 0, errors: [], cap: parseInt(settings.max_emails_per_day || "100", 10), sentTodayBefore: 0, sendAll, processed: 0, skipped: true, reason: "auto_send_enabled is false — add ?force=true to override" };
   }
 
-  const maxPerDay = parseInt(settings.max_emails_per_day || "20", 10);
-  const maxWhatsAppPerDay = parseInt(settings.max_whatsapp_per_day || "50", 10);
+  const maxPerDay = parseInt(settings.max_emails_per_day || "100", 10);
+  const maxWhatsAppPerDay = parseInt(settings.max_whatsapp_per_day || "100", 10);
   const emailFrom = settings.email_from || process.env.EMAIL_FROM || "noreply@bitora.it";
 
   const todayStart = new Date();
@@ -1525,8 +1525,8 @@ export async function runFollowUpWorker(): Promise<FollowUpWorkerResult> {
     where: { key: { in: ["max_whatsapp_per_day", "max_emails_per_day", "email_from"] } },
   });
   const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
-  const maxWhatsAppPerDay = parseInt(settings.max_whatsapp_per_day || "50", 10);
-  const maxEmailsPerDay = parseInt(settings.max_emails_per_day || "20", 10);
+  const maxWhatsAppPerDay = parseInt(settings.max_whatsapp_per_day || "100", 10);
+  const maxEmailsPerDay = parseInt(settings.max_emails_per_day || "100", 10);
   const emailFrom = settings.email_from || process.env.EMAIL_FROM || "noreply@bitora.it";
 
   const todayStart = new Date();

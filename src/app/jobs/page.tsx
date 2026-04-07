@@ -52,9 +52,9 @@ interface JobState {
 }
 
 const COLOR_MAP: Record<string, string> = {
-  indigo: "bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800",
-  amber: "bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800",
-  emerald: "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800",
+  indigo: "btn btn-primary",
+  amber: "btn btn-outline",
+  emerald: "btn btn-success",
 };
 
 const ICON_BG_MAP: Record<string, string> = {
@@ -141,13 +141,12 @@ export default function JobsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-2">
-        <Terminal className="w-7 h-7 sm:w-8 sm:h-8 text-[var(--primary)]" />
-        <h1 className="text-2xl sm:text-3xl font-bold">Esecuzione Job</h1>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title"><Terminal className="w-6 h-6 text-[var(--primary)]" /> Esecuzione Job</h1>
+          <p className="page-subtitle">Lancia manualmente il motore automatico. In produzione va schedulata solo l&apos;Automazione Completa.</p>
+        </div>
       </div>
-      <p className="text-sm text-[var(--muted-foreground)] mb-8">
-        Lancia manualmente il motore automatico. In produzione va schedulata solo l&apos;Automazione Completa: crea campagne AI, esegue Ricerca Clienti, Analisi Clienti e Invio Mail.
-      </p>
 
       <div className="grid max-w-6xl gap-6 xl:grid-cols-2">
         {JOBS.map((job) => {
@@ -160,7 +159,7 @@ export default function JobsPage() {
           return (
             <div
               key={job.id}
-              className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 sm:p-6"
+              className="section-card"
             >
               <div className="flex items-start gap-4 mb-4">
                 <div className={`p-2.5 rounded-lg shrink-0 ${ICON_BG_MAP[job.color]}`}>
@@ -186,7 +185,7 @@ export default function JobsPage() {
                         onChange={(e) => setExtraValue(job.id, field.key, e.target.value)}
                         placeholder={field.placeholder}
                         disabled={isRunning}
-                        className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] text-sm disabled:opacity-50"
+                        className="input disabled:opacity-50"
                       />
                     </div>
                   ))}
@@ -197,7 +196,7 @@ export default function JobsPage() {
               <button
                 onClick={() => runJob(job)}
                 disabled={isRunning || anyRunning}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors ${COLOR_MAP[job.color]}`}
+                className={COLOR_MAP[job.color]}
               >
                 {isRunning ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -238,7 +237,7 @@ export default function JobsPage() {
       </div>
 
       {/* Info card */}
-      <div className="mt-8 max-w-6xl bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+      <div className="mt-8 max-w-6xl section-card">
         <h3 className="text-sm font-semibold mb-3">Uso corretto di questa pagina</h3>
         <div className="space-y-2 text-sm text-[var(--muted-foreground)]">
           <p>Questa pagina serve solo per trigger manuali e debug operativo.</p>

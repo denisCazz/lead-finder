@@ -3,62 +3,21 @@ import { prisma } from "@/lib/db";
 import { BackfillButton } from "@/components/BackfillButton";
 import {
   ArrowRight,
-  BarChart3,
   Bot,
-  Clock3,
   Flame,
   Mail,
   MapPin,
   MessageCircle,
-  MessageSquare,
-  Radar,
   RefreshCw,
-  ScrollText,
   Send,
   Settings,
   Sparkles,
   Terminal,
   Users,
-  Workflow,
+  Zap,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
-
-type DashboardLead = {
-  id: number;
-  companyName: string;
-  sector: string | null;
-  city: string | null;
-  score: number;
-  email: string | null;
-  phone: string | null;
-  analyses: {
-    aiScore: number | null;
-    suggestedService: string | null;
-  }[];
-  messages: {
-    status: string;
-    type: string;
-  }[];
-};
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("it-IT", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(date);
-}
-
-function formatDateTime(date: Date) {
-  return new Intl.DateTimeFormat("it-IT", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 
 function timeAgo(date: Date) {
   const diff = Date.now() - date.getTime();
@@ -68,24 +27,6 @@ function timeAgo(date: Date) {
   return `${Math.floor(diff / 86400000)}g fa`;
 }
 
-function asPercent(value: number, total: number) {
-  if (!total) return 0;
-  return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
-}
-
-function messageState(lead: DashboardLead) {
-  const message = lead.messages[0];
-  if (!message) {
-    if (lead.phone && !lead.email) return { label: "WhatsApp manuale", tone: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20" };
-    if (!lead.email && !lead.phone) return { label: "Senza contatto", tone: "text-slate-300 bg-slate-500/10 border-slate-500/20" };
-    return { label: "Nessun messaggio", tone: "text-slate-300 bg-slate-500/10 border-slate-500/20" };
-  }
-  if (message.status === "sent") return { label: "Email inviata", tone: "text-green-300 bg-green-500/10 border-green-500/20" };
-  if (message.status === "failed") return { label: "Invio fallito", tone: "text-red-300 bg-red-500/10 border-red-500/20" };
-  if (message.status === "draft") return { label: "Bozza pronta", tone: "text-amber-300 bg-amber-500/10 border-amber-500/20" };
-  return { label: message.status, tone: "text-slate-300 bg-slate-500/10 border-slate-500/20" };
-}
-
 async function getDashboardData() {
   try {
     const today = new Date();
@@ -93,11 +34,9 @@ async function getDashboardData() {
     const week = new Date(today);
     week.setDate(week.getDate() - 7);
 
-    const [settingsRows, counts, campaigns, logs, topLeads, outreachPreview, cityLogs, tokenLogs, lastBackfill] = await Promise.all([
+    const [settingsRows, counts, campaigns, logs, topLeads, cityLogs, tokenLogs, lastBackfill] = await Promise.all([
       prisma.setting.findMany({
-        where: {
-          key: { in: ["auto_send_enabled", "auto_send_min_score", "max_emails_per_day", "app_url", "email_from"] },
-        },
+        where: { key: { in: ["auto_send_enabled", "max_emails_per_day", "max_whatsapp_per_day", "email_from"] } },
       }),
       Promise.all([
         prisma.lead.count(),
@@ -105,15 +44,6 @@ async function getDashboardData() {
         prisma.lead.count({ where: { analyses: { some: {} } } }),
         prisma.lead.count({ where: { score: { gte: 75 } } }),
         prisma.lead.count({ where: { analyses: { none: {} } } }),
-        prisma.lead.count({
-          where: {
-            OR: [
-              { analyses: { none: {} } },
-              { status: "analyzed", messages: { none: {} } },
-              { status: "new" },
-            ],
-          },
-        }),
         prisma.message.count({ where: { type: "email", status: "draft" } }),
         prisma.message.count({ where: { type: "email", status: "sent", sentAt: { gte: today } } }),
         prisma.message.count({ where: { type: "email", status: "failed" } }),
@@ -135,7 +65,7 @@ async function getDashboardData() {
       }),
       prisma.activityLog.findMany({
         orderBy: { createdAt: "desc" },
-        take: 10,
+        take: 8,
         include: {
           lead: { select: { id: true, companyName: true } },
           campaign: { select: { id: true, name: true } },
@@ -144,25 +74,10 @@ async function getDashboardData() {
       prisma.lead.findMany({
         where: { score: { gte: 75 } },
         orderBy: [{ score: "desc" }, { createdAt: "desc" }],
-        take: 6,
+        take: 5,
         include: {
           analyses: { orderBy: { analyzedAt: "desc" }, take: 1, select: { aiScore: true, suggestedService: true } },
           messages: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, type: true } },
-        },
-      }),
-      prisma.lead.findMany({
-        where: {
-          status: { notIn: ["contacted", "rejected"] },
-          OR: [
-            { phone: { not: null }, email: null },
-            { email: { not: null }, messages: { some: { status: "draft" } } },
-          ],
-        },
-        orderBy: [{ score: "desc" }, { createdAt: "desc" }],
-        take: 6,
-        include: {
-          analyses: { orderBy: { analyzedAt: "desc" }, take: 1, select: { aiScore: true, suggestedService: true } },
-          messages: { where: { status: "draft" }, orderBy: { createdAt: "desc" }, take: 1, select: { status: true, type: true } },
         },
       }),
       prisma.cityLog.findMany({ orderBy: { scrapedAt: "desc" }, take: 5 }),
@@ -177,32 +92,18 @@ async function getDashboardData() {
       prisma.activityLog.findFirst({
         where: { type: "backfill" },
         orderBy: { createdAt: "desc" },
-        select: { message: true, createdAt: true }
+        select: { message: true, createdAt: true },
       }),
     ]);
 
     const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
-    const [
-      totalLeads,
-      leadsToday,
-      analyzedLeads,
-      hotLeadCount,
-      pendingAnalysisCount,
-        backlogCount,
-      draftEmailCount,
-      sentTodayCount,
-      failedEmailCount,
-      outreachCount,
-      errorCount,
-    ] = counts;
+    const [totalLeads, leadsToday, analyzedLeads, hotLeadCount, pendingAnalysisCount, draftEmailCount, sentTodayCount, failedEmailCount, outreachCount, errorCount] = counts;
 
     const weeklyTokens = tokenLogs.reduce((sum, log) => {
       try {
         const parsed = JSON.parse(log.metadata ?? "{}");
         return sum + (parsed.tokensUsed ?? 0);
-      } catch {
-        return sum;
-      }
+      } catch { return sum; }
     }, 0);
 
     return {
@@ -210,503 +111,253 @@ async function getDashboardData() {
       lastBackfill,
       settings: {
         autoSendEnabled: settings.auto_send_enabled !== "false",
-        minScore: parseInt(settings.auto_send_min_score || "70", 10),
-        maxEmailsPerDay: parseInt(settings.max_emails_per_day || "20", 10),
+        maxEmailsPerDay: parseInt(settings.max_emails_per_day || "100", 10),
+        maxWhatsAppPerDay: parseInt(settings.max_whatsapp_per_day || "100", 10),
         emailFrom: settings.email_from || process.env.EMAIL_FROM || "info@bitora.it",
       },
-      metrics: {
-        totalLeads,
-        leadsToday,
-        analyzedLeads,
-        hotLeadCount,
-        pendingAnalysisCount,
-        backlogCount,
-        draftEmailCount,
-        sentTodayCount,
-        failedEmailCount,
-        outreachCount,
-        errorCount,
-        weeklyTokens,
-      },
+      metrics: { totalLeads, leadsToday, analyzedLeads, hotLeadCount, pendingAnalysisCount, draftEmailCount, sentTodayCount, failedEmailCount, outreachCount, errorCount, weeklyTokens },
       campaigns,
       logs,
-      topLeads: topLeads as DashboardLead[],
-      outreachPreview: outreachPreview as DashboardLead[],
+      topLeads,
       cityLogs,
     };
   } catch {
     return {
       dbConnected: false,
       lastBackfill: null,
-      settings: { autoSendEnabled: false, minScore: 70, maxEmailsPerDay: 20, emailFrom: "info@bitora.it" },
-      metrics: {
-        totalLeads: 0,
-        leadsToday: 0,
-        analyzedLeads: 0,
-        hotLeadCount: 0,
-        pendingAnalysisCount: 0,
-        backlogCount: 0,
-        draftEmailCount: 0,
-        sentTodayCount: 0,
-        failedEmailCount: 0,
-        outreachCount: 0,
-        errorCount: 0,
-        weeklyTokens: 0,
-      },
+      settings: { autoSendEnabled: false, maxEmailsPerDay: 100, maxWhatsAppPerDay: 100, emailFrom: "info@bitora.it" },
+      metrics: { totalLeads: 0, leadsToday: 0, analyzedLeads: 0, hotLeadCount: 0, pendingAnalysisCount: 0, draftEmailCount: 0, sentTodayCount: 0, failedEmailCount: 0, outreachCount: 0, errorCount: 0, weeklyTokens: 0 },
       campaigns: [],
       logs: [],
       topLeads: [],
-      outreachPreview: [],
       cityLogs: [],
     };
   }
 }
 
-function SectionCard({ title, description, action, children }: { title: string; description?: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 sm:p-6">
-      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-[var(--foreground)]">{title}</h2>
-          {description && <p className="mt-1 text-sm text-[var(--muted-foreground)]">{description}</p>}
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 export default async function DashboardPage() {
-  const data = await getDashboardData();
+  const d = await getDashboardData();
+  const activeCampaigns = d.campaigns.filter((c) => c.status === "active").length;
 
-  const activeCampaigns = data.campaigns.filter((campaign) => campaign.status === "active").length;
-  const completedCampaigns = data.campaigns.filter((campaign) => campaign.status === "completed").length;
-  const deliveryRate = data.metrics.sentTodayCount + data.metrics.failedEmailCount > 0
-    ? Math.round((data.metrics.sentTodayCount / (data.metrics.sentTodayCount + data.metrics.failedEmailCount)) * 100)
-    : 100;
-
-  const navigationCards = [
-    { href: "/settings", icon: Settings, title: "Automazione", text: "Configura soglie, invio, webhook e settori." },
-    { href: "/jobs", icon: Terminal, title: "Job manuali", text: "Lancia Automazione Completa o strumenti AI di supporto." },
-    { href: "/logs", icon: ScrollText, title: "Log completi", text: "Controlla esiti, errori e attivita' recenti." },
-    { href: "/outreach", icon: MessageCircle, title: "Outreach", text: "Gestisci WhatsApp manuali e code eccezioni." },
-    { href: "/hot-leads", icon: Flame, title: "Hot leads", text: "Apri i lead con priorita' piu' alta e email inviate." },
-    { href: "/leads", icon: Users, title: "Archivio lead", text: "Esplora tutti i lead trovati e il loro stato." },
-    { href: "/messages", icon: MessageSquare, title: "Messaggi", text: "Monitora bozze, invii e storico email." },
-    { href: "/usage", icon: BarChart3, title: "Utilizzo AI", text: "Verifica token, costi e volume generato." },
-    { href: "/ai-campaign", icon: Workflow, title: "AI Campaign", text: "Verifica suggerimenti e pianificazione campagne." },
+  const kpis = [
+    { label: "Lead Totali", value: d.metrics.totalLeads, detail: `+${d.metrics.leadsToday} oggi`, color: "text-indigo-400" },
+    { label: "Hot Leads", value: d.metrics.hotLeadCount, detail: "score ≥ 75", color: "text-orange-400" },
+    { label: "Email Oggi", value: d.metrics.sentTodayCount, detail: `${d.metrics.draftEmailCount} bozze`, color: "text-emerald-400" },
+    { label: "Outreach", value: d.metrics.outreachCount, detail: "manuale", color: "text-sky-400" },
+    { label: "Da Analizzare", value: d.metrics.pendingAnalysisCount, detail: "in coda AI", color: "text-amber-400" },
+    { label: "Errori", value: d.metrics.errorCount, detail: `${d.metrics.failedEmailCount} falliti`, color: d.metrics.errorCount > 0 ? "text-red-400" : "text-slate-400" },
   ];
 
-  const primaryCards = [
-    { label: "Lead Totali", value: data.metrics.totalLeads, detail: `+${data.metrics.leadsToday} oggi`, icon: Users, tone: "text-sky-300 bg-sky-500/10 border-sky-500/20" },
-    { label: "Hot Leads", value: data.metrics.hotLeadCount, detail: "score >= 75", icon: Flame, tone: "text-orange-300 bg-orange-500/10 border-orange-500/20" },
-    { label: "Arretrato", value: data.metrics.backlogCount, detail: "lead ancora da scodare", icon: RefreshCw, tone: "text-indigo-300 bg-indigo-500/10 border-indigo-500/20" },
-    { label: "Outreach Manuale", value: data.metrics.outreachCount, detail: "eccezioni aperte", icon: MessageCircle, tone: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20" },
-    { label: "Email Oggi", value: data.metrics.sentTodayCount, detail: `${data.metrics.draftEmailCount} draft pronte`, icon: Send, tone: "text-green-300 bg-green-500/10 border-green-500/20" },
-  ];
-
-  const funnel = [
-    { label: "Lead trovati", value: data.metrics.totalLeads, icon: Users },
-    { label: "Analizzati", value: data.metrics.analyzedLeads, icon: Sparkles },
-    { label: "Bozze email", value: data.metrics.draftEmailCount, icon: Mail },
-    { label: "Email inviate oggi", value: data.metrics.sentTodayCount, icon: Send },
-    { label: "Outreach manuale", value: data.metrics.outreachCount, icon: MessageCircle },
+  const quickLinks = [
+    { href: "/settings", icon: Settings, label: "Impostazioni" },
+    { href: "/jobs", icon: Terminal, label: "Esegui Job" },
+    { href: "/hot-leads", icon: Flame, label: "Hot Leads" },
+    { href: "/outreach", icon: MessageCircle, label: "Outreach" },
+    { href: "/messages", icon: Mail, label: "Messaggi" },
+    { href: "/leads", icon: Users, label: "Archivio" },
   ];
 
   return (
     <div className="space-y-6">
-      {!data.dbConnected && (
-        <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-200">
-          <p className="font-medium">Database non raggiungibile</p>
-          <p className="mt-1 text-sm text-yellow-200/80">La dashboard mostra solo fallback statici finche' il database non torna disponibile.</p>
+      {!d.dbConnected && (
+        <div className="section-card border-amber-500/30 bg-amber-500/10 text-amber-200">
+          <p className="font-semibold">Database non raggiungibile</p>
+          <p className="text-sm mt-1 opacity-80">La dashboard mostra dati fallback.</p>
         </div>
       )}
 
-      <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.18),_transparent_28%),linear-gradient(180deg,_rgba(15,23,42,0.92),_rgba(15,23,42,0.98))] p-4 sm:p-6 lg:p-8">
-        <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
-          <div className="max-w-3xl">
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-sky-200/80">
-              <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1">Centro Operativo</span>
-              <span className="hidden sm:inline rounded-full border border-white/10 bg-white/5 px-3 py-1">Bitora.it</span>
-              <span className="hidden sm:inline rounded-full border border-white/10 bg-white/5 px-3 py-1">{formatDate(new Date())}</span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-4xl text-balance">Dashboard unificata lead, AI, outreach e automazioni</h1>
-            <p className="mt-2 sm:mt-3 max-w-2xl text-sm leading-6 text-slate-300 text-balance">Stato reale della pipeline: cosa e&apos; stato trovato, analizzato, pronto da inviare e dove serve intervento manuale.</p>
-
-            <div className="mt-4 sm:mt-6 flex flex-row flex-wrap gap-2">
-              <Link href="/settings" className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-100">
-                <Settings className="h-4 w-4 shrink-0" />
-                <span>Impostazioni</span>
-              </Link>
-              <Link href="/jobs" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
-                <Terminal className="h-4 w-4 shrink-0" />
-                <span>Lancia job</span>
-              </Link>
-              <Link href="/logs" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
-                <ScrollText className="h-4 w-4 shrink-0" />
-                <span>Apri log</span>
-              </Link>
-            </div>
-
-            <div className="mt-4 sm:mt-6 grid gap-3 grid-cols-3">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs text-slate-400">Campagne attive</p>
-                <p className="mt-1 text-2xl font-semibold text-white">{activeCampaigns}</p>
-                <p className="mt-1 text-xs text-emerald-300">{completedCampaigns} completate</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs text-slate-400">Lead da analizzare</p>
-                <p className="mt-1 text-2xl font-semibold text-white">{data.metrics.pendingAnalysisCount}</p>
-                <p className="mt-1 text-xs text-amber-300">nuovi lead in coda AI</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs text-slate-400">Deliverability oggi</p>
-                <p className="mt-1 text-2xl font-semibold text-white">{deliveryRate}%</p>
-                <p className="mt-1 text-xs text-sky-300">{data.metrics.sentTodayCount} inviate, {data.metrics.failedEmailCount} failed</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5">
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Automazione</p>
-                <h2 className="mt-1 text-lg font-semibold text-white">Stato operativo</h2>
-              </div>
-              <Link href="/settings" className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs text-white transition hover:bg-white/10 shrink-0">
-                <Settings className="h-3.5 w-3.5" />
-                Settings
-              </Link>
-            </div>
-
-            <div className="space-y-2">
-              {[
-                { label: "Ricerca clienti", value: "worker interno", state: "trova nuovi lead", ok: true },
-                { label: "Analisi clienti", value: "AI attiva", state: "diagnosi + decisione invio", ok: true },
-                { label: "Invio mail", value: data.settings.autoSendEnabled ? "attivo" : "forzato", state: `cap ${data.settings.maxEmailsPerDay}/giorno`, ok: true },
-                { label: "Mittente", value: data.settings.emailFrom, state: "config attiva", ok: true },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-slate-300 font-medium leading-none">{item.label}</p>
-                    <p className="mt-1 text-xs text-slate-500 truncate">{item.state}</p>
-                  </div>
-                  <div className="text-right shrink-0 max-w-[40%]">
-                    <p className="text-xs font-semibold text-white truncate">{item.value}</p>
-                    <p className={`mt-0.5 text-xs ${item.ok ? "text-emerald-400" : "text-amber-400"}`}>{item.ok ? "ok" : "attenzione"}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-        {primaryCards.map((card) => (
-          <div key={card.label} className={`rounded-2xl border p-3 sm:p-4 ${card.tone}`}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-xs font-medium leading-none truncate">{card.label}</p>
-                <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{card.value}</p>
-                <p className="mt-1 text-xs text-current/80 truncate">{card.detail}</p>
-              </div>
-              <card.icon className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 opacity-70 mt-0.5" />
-            </div>
+      {/* KPI Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {kpis.map((k) => (
+          <div key={k.label} className="kpi-card">
+            <p className="kpi-label">{k.label}</p>
+            <p className={`kpi-value ${k.color}`}>{k.value}</p>
+            <p className="kpi-detail">{k.detail}</p>
           </div>
         ))}
-        <div className={`rounded-2xl border p-3 sm:p-4 ${data.metrics.errorCount > 0 ? "text-red-300 bg-red-500/10 border-red-500/20" : "text-slate-300 bg-slate-500/10 border-slate-500/20"}`}>
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-medium leading-none">Errori Oggi</p>
-              <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{data.metrics.errorCount}</p>
-              <p className="mt-1 text-xs text-current/80">{data.metrics.failedEmailCount} falliti</p>
-            </div>
-            <Radar className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 opacity-70 mt-0.5" />
+      </div>
+
+      {/* Status Row */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="section-card">
+          <p className="section-title"><Zap className="w-4 h-4 text-[var(--primary)]" /> Stato Automazione</p>
+          <div className="space-y-2">
+            {[
+              { label: "Invio email", value: d.settings.autoSendEnabled ? "Attivo" : "Off", ok: d.settings.autoSendEnabled },
+              { label: "Cap email/giorno", value: String(d.settings.maxEmailsPerDay), ok: true },
+              { label: "Cap WhatsApp/giorno", value: String(d.settings.maxWhatsAppPerDay), ok: true },
+              { label: "Campagne attive", value: String(activeCampaigns), ok: activeCampaigns > 0 },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center justify-between py-1.5 text-sm">
+                <span className="text-[var(--muted-foreground)]">{row.label}</span>
+                <span className={row.ok ? "text-emerald-400 font-medium" : "text-amber-400 font-medium"}>{row.value}</span>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-3 sm:p-4 text-fuchsia-300">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-medium leading-none">Token 7g</p>
-              <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{data.metrics.weeklyTokens > 999 ? `${(data.metrics.weeklyTokens/1000).toFixed(1)}k` : data.metrics.weeklyTokens}</p>
-              <p className="mt-1 text-xs text-current/80">consumo AI</p>
-            </div>
-            <Bot className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 opacity-70 mt-0.5" />
-          </div>
-        </div>
-      </section>
 
-      <section className="space-y-6">
-        <SectionCard title="Pipeline operativa" description="Conversione dal lead trovato all'invio o al passaggio in outreach manuale." action={<Link href="/usage" className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"><BarChart3 className="h-4 w-4" />Utilizzo AI</Link>}>
-          <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/25 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Analisi AI</p>
-              <p className="mt-2 text-2xl font-semibold">{data.metrics.analyzedLeads}</p>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">lead con scheda analitica completata</p>
-            </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/25 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Bozze pronte</p>
-              <p className="mt-2 text-2xl font-semibold">{data.metrics.draftEmailCount}</p>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">email in revisione oppure approvate dall&apos;AI</p>
-            </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/25 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Invii oggi</p>
-              <p className="mt-2 text-2xl font-semibold">{data.metrics.sentTodayCount}</p>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">spedizioni completate dal worker Invio Mail</p>
-            </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/25 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Eccezioni</p>
-              <p className="mt-2 text-2xl font-semibold">{data.metrics.outreachCount}</p>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">lead passati a revisione manuale</p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            {funnel.map((step, index) => (
-              <div key={step.label} className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <step.icon className="h-5 w-5 text-[var(--primary)]" />
-                  <span className="text-xs text-[var(--muted-foreground)]">{index + 1}/5</span>
+        <div className="section-card">
+          <p className="section-title"><Sparkles className="w-4 h-4 text-amber-400" /> Pipeline</p>
+          <div className="space-y-2.5">
+            {[
+              { label: "Trovati", value: d.metrics.totalLeads, pct: 100 },
+              { label: "Analizzati", value: d.metrics.analyzedLeads, pct: d.metrics.totalLeads ? Math.round((d.metrics.analyzedLeads / d.metrics.totalLeads) * 100) : 0 },
+              { label: "Bozze email", value: d.metrics.draftEmailCount, pct: d.metrics.totalLeads ? Math.round((d.metrics.draftEmailCount / d.metrics.totalLeads) * 100) : 0 },
+              { label: "Inviati oggi", value: d.metrics.sentTodayCount, pct: d.metrics.totalLeads ? Math.round((d.metrics.sentTodayCount / d.metrics.totalLeads) * 100) : 0 },
+            ].map((step) => (
+              <div key={step.label}>
+                <div className="flex items-center justify-between text-sm mb-1">
+                  <span className="text-[var(--muted-foreground)]">{step.label}</span>
+                  <span className="font-medium">{step.value}</span>
                 </div>
-                <p className="text-sm text-[var(--muted-foreground)]">{step.label}</p>
-                <p className="mt-1 text-2xl font-semibold">{step.value}</p>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--border)]">
-                  <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${asPercent(step.value, Math.max(data.metrics.totalLeads, 1))}%` }} />
+                <div className="h-1.5 rounded-full bg-[var(--muted)]">
+                  <div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${Math.min(step.pct, 100)}%` }} />
                 </div>
               </div>
             ))}
           </div>
-        </SectionCard>
-          <SectionCard title="Comandi e pagine chiave" description="Azioni principali e accessi rapidi raccolti in un unico pannello.">
-            <div className="mb-5 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4 flex flex-col justify-between">
-                <div>
-                  <p className="text-sm font-medium">Configurazione sistema</p>
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">Gestisci automazioni, soglie, webhook e parametri del loop continuo.</p>
-                </div>
-                <Link href="/settings" className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)] transition hover:opacity-90">
-                  <Settings className="h-4 w-4" />
-                  Apri Settings
-                </Link>
-              </div>
+        </div>
 
-              <BackfillButton lastLog={data.lastBackfill} />
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {navigationCards.map((action) => (
-                <Link key={action.href} href={action.href} className="group rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4 transition hover:border-[var(--primary)]/40 hover:bg-[var(--muted)]/60">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="mb-2 inline-flex rounded-lg bg-[var(--primary)]/10 p-2 text-[var(--primary)]">
-                        <action.icon className="h-4 w-4" />
-                      </div>
-                      <p className="font-medium">{action.title}</p>
-                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">{action.text}</p>
-                    </div>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition group-hover:text-[var(--foreground)]" />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Coda outreach manuale" description="Lead che richiedono intervento umano: solo telefono oppure email sotto soglia." action={<Link href="/outreach" className="text-sm text-[var(--primary)] hover:underline">Apri Outreach</Link>}>
-            <div className="mb-5 grid gap-3 lg:grid-cols-3">
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-emerald-200/80">In coda</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{data.metrics.outreachCount}</p>
-                <p className="mt-1 text-sm text-emerald-100/80">lead che attendono un'azione manuale</p>
-              </div>
-              <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-sky-200/80">Solo telefono</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{data.outreachPreview.filter((lead) => lead.phone && !lead.email).length}</p>
-                <p className="mt-1 text-sm text-sky-100/80">candidati WhatsApp o contatto diretto</p>
-              </div>
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-amber-200/80">Bozze da rivedere</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{data.outreachPreview.filter((lead) => !!lead.email).length}</p>
-                <p className="mt-1 text-sm text-amber-100/80">email presenti ma fuori dal flusso automatico</p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-2">
-              {data.outreachPreview.map((lead) => {
-                const latestAnalysis = lead.analyses[0];
-                return (
-                  <div key={lead.id} className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <Link href={`/leads/${lead.id}`} className="font-medium hover:text-[var(--primary)]">{lead.companyName}</Link>
-                        <p className="mt-1 text-xs text-[var(--muted-foreground)]">{[lead.sector, lead.city].filter(Boolean).join(" • ") || "Lead senza dettagli completi"}</p>
-                        <p className="mt-2 text-xs text-[var(--muted-foreground)]">{lead.phone ? `Telefono ${lead.phone}` : lead.email ? `Email ${lead.email}` : "Nessun contatto"}</p>
-                      </div>
-                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-300">{lead.score}</span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
-                      <span>{latestAnalysis?.suggestedService || "Servizio da definire"}</span>
-                      <span>{lead.phone && !lead.email ? "WhatsApp" : "Revisione email"}</span>
-                    </div>
-                  </div>
-                );
-              })}
-              {data.outreachPreview.length === 0 && (
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200 lg:col-span-2">Nessuna eccezione aperta. La coda manuale e' vuota.</div>
-              )}
-            </div>
-          </SectionCard>
-        </section>
-
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <SectionCard title="Hot leads pronti da chiudere" description="Lead ad alta priorita' con score alto e stato del messaggio piu' recente." action={<Link href="/hot-leads" className="text-sm text-[var(--primary)] hover:underline">Apri Hot Leads</Link>}>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
-                    <th className="pb-3 font-medium">Lead</th>
-                    <th className="pb-3 font-medium">Score</th>
-                    <th className="pb-3 font-medium">AI</th>
-                    <th className="pb-3 font-medium">Servizio</th>
-                    <th className="pb-3 font-medium">Stato</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.topLeads.map((lead) => {
-                    const latestAnalysis = lead.analyses[0];
-                    const state = messageState(lead);
-                    return (
-                      <tr key={lead.id} className="border-b border-[var(--border)] last:border-0">
-                        <td className="py-3 pr-3">
-                          <Link href={`/leads/${lead.id}`} className="font-medium text-[var(--foreground)] hover:text-[var(--primary)]">{lead.companyName}</Link>
-                          <p className="mt-1 text-xs text-[var(--muted-foreground)]">{[lead.sector, lead.city].filter(Boolean).join(" • ") || "Settore o citta' mancanti"}</p>
-                        </td>
-                        <td className="py-3 pr-3"><span className="rounded-full border border-orange-500/20 bg-orange-500/10 px-2 py-1 text-xs font-semibold text-orange-300">{lead.score}</span></td>
-                        <td className="py-3 pr-3 text-[var(--muted-foreground)]">{latestAnalysis?.aiScore ?? "-"}</td>
-                        <td className="py-3 pr-3 text-[var(--muted-foreground)]">{latestAnalysis?.suggestedService || "-"}</td>
-                        <td className="py-3"><span className={`inline-flex rounded-full border px-2 py-1 text-xs ${state.tone}`}>{state.label}</span></td>
-                      </tr>
-                    );
-                  })}
-                  {data.topLeads.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-[var(--muted-foreground)]">Nessun hot lead disponibile.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </SectionCard>
-        </section>
-
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard title="Radar campagne e citta'" description="Stato delle campagne attive e ultime citta' lavorate dal job notturno." action={<Link href="/jobs" className="text-sm text-[var(--primary)] hover:underline">Esegui job</Link>}>
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              {data.campaigns.map((campaign) => (
-                <div key={campaign.id} className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{campaign.name}</p>
-                      <p className="mt-1 text-xs text-[var(--muted-foreground)]">{[campaign.sector, campaign.city || campaign.region].filter(Boolean).join(" • ")}</p>
-                    </div>
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${campaign.status === "active" ? "bg-green-500/10 text-green-300" : campaign.status === "completed" ? "bg-slate-500/10 text-slate-300" : "bg-amber-500/10 text-amber-300"}`}>{campaign.status}</span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between text-xs text-[var(--muted-foreground)]">
-                    <span>{campaign._count.leads} lead</span>
-                    <span>{campaign._count.logs} log</span>
-                  </div>
-                </div>
-              ))}
-              {data.campaigns.length === 0 && (
-                <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4 text-sm text-[var(--muted-foreground)]">Nessuna campagna disponibile.</div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-[var(--primary)]" />
-                <p className="text-sm font-medium">Ultime citta' lavorate</p>
-              </div>
-              <div className="space-y-2 text-sm">
-                {data.cityLogs.map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-2">
-                    <div>
-                      <p className="font-medium">{entry.city}</p>
-                      <p className="text-xs text-[var(--muted-foreground)]">{[entry.sector, entry.region].filter(Boolean).join(" • ")}</p>
-                    </div>
-                    <div className="text-right text-xs text-[var(--muted-foreground)]">
-                      <p>{entry.leadsFound} lead</p>
-                      <p>{timeAgo(entry.scrapedAt)}</p>
-                    </div>
-                  </div>
-                ))}
-                {data.cityLogs.length === 0 && <p className="text-[var(--muted-foreground)]">Nessuna citta' registrata ancora.</p>}
-              </div>
-            </div>
+        <div className="section-card flex flex-col justify-between gap-4">
+          <div>
+            <p className="section-title"><Bot className="w-4 h-4 text-purple-400" /> AI Consumo 7g</p>
+            <p className="text-3xl font-bold text-white mt-2">
+              {d.metrics.weeklyTokens > 999 ? `${(d.metrics.weeklyTokens / 1000).toFixed(1)}k` : d.metrics.weeklyTokens}
+            </p>
+            <p className="text-sm text-[var(--muted-foreground)] mt-1">token utilizzati</p>
           </div>
-        </SectionCard>
+          <BackfillButton lastLog={d.lastBackfill} />
+        </div>
+      </div>
 
-        <SectionCard title="Attivita' recenti" description="Ultimi eventi di scraping, AI, invio e gestione manuale." action={<Link href="/logs" className="text-sm text-[var(--primary)] hover:underline">Apri log completi</Link>}>
-          <div className="space-y-3">
-            {data.logs.map((log) => {
+      {/* Quick Links */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {quickLinks.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="section-card flex items-center gap-3 px-4 py-3 hover:border-[var(--primary)]/40 transition-all group"
+          >
+            <link.icon className="w-4 h-4 text-[var(--primary)] shrink-0" />
+            <span className="text-sm font-medium truncate">{link.label}</span>
+            <ArrowRight className="w-3.5 h-3.5 ml-auto text-[var(--muted-foreground)] group-hover:text-[var(--foreground)] shrink-0 transition-colors" />
+          </Link>
+        ))}
+      </div>
+
+      {/* Hot Leads + Activity */}
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="section-card">
+          <div className="flex items-center justify-between mb-4">
+            <p className="section-title mb-0"><Flame className="w-4 h-4 text-orange-400" /> Hot Leads</p>
+            <Link href="/hot-leads" className="text-sm text-[var(--primary)] hover:underline">Vedi tutti</Link>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lead</th>
+                  <th>Score</th>
+                  <th>Servizio</th>
+                  <th>Stato</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.topLeads.map((lead) => {
+                  const analysis = lead.analyses?.[0];
+                  const msg = lead.messages?.[0];
+                  return (
+                    <tr key={lead.id}>
+                      <td>
+                        <Link href={`/leads/${lead.id}`} className="font-medium text-[var(--foreground)] hover:text-[var(--primary)]">{lead.companyName}</Link>
+                        <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{[lead.sector, lead.city].filter(Boolean).join(" · ")}</p>
+                      </td>
+                      <td><span className="badge badge-orange">{lead.score}</span></td>
+                      <td className="text-[var(--muted-foreground)] text-sm">{analysis?.suggestedService || "—"}</td>
+                      <td>
+                        {msg ? (
+                          <span className={`badge ${msg.status === "sent" ? "badge-green" : msg.status === "draft" ? "badge-yellow" : "badge-gray"}`}>{msg.status}</span>
+                        ) : (
+                          <span className="badge badge-gray">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {d.topLeads.length === 0 && (
+                  <tr><td colSpan={4} className="text-center py-8 text-[var(--muted-foreground)]">Nessun hot lead</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="section-card">
+          <div className="flex items-center justify-between mb-4">
+            <p className="section-title mb-0"><RefreshCw className="w-4 h-4 text-sky-400" /> Attività recenti</p>
+            <Link href="/logs" className="text-sm text-[var(--primary)] hover:underline">Tutti i log</Link>
+          </div>
+          <div className="space-y-2">
+            {d.logs.map((log) => {
               const isError = log.type.includes("error");
-              const isSend = log.type === "send";
               return (
-                <div key={log.id} className={`rounded-2xl border p-4 ${isError ? "border-red-500/20 bg-red-500/10" : isSend ? "border-blue-500/20 bg-blue-500/10" : "border-[var(--border)] bg-[var(--muted)]/35"}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">{log.message}</p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
-                        <span>{formatDateTime(log.createdAt)}</span>
-                        {log.campaign && <span>• {log.campaign.name}</span>}
-                        {log.lead && <span>• {log.lead.companyName}</span>}
-                        <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 font-mono">{log.type}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      {timeAgo(log.createdAt)}
-                    </div>
+                <div key={log.id} className={`rounded-lg px-3 py-2.5 text-sm ${isError ? "bg-red-500/10 border border-red-500/20" : "bg-[var(--muted)]"}`}>
+                  <p className="line-clamp-2 text-[var(--foreground)]">{log.message}</p>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-[var(--muted-foreground)]">
+                    <span>{timeAgo(log.createdAt)}</span>
+                    <span className="badge badge-gray">{log.type}</span>
                   </div>
                 </div>
               );
             })}
-            {data.logs.length === 0 && <p className="text-[var(--muted-foreground)]">Nessuna attivita' disponibile.</p>}
+            {d.logs.length === 0 && <p className="text-[var(--muted-foreground)] text-sm">Nessuna attività recente</p>}
           </div>
-        </SectionCard>
-      </section>
+        </div>
+      </div>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1fr_1.1fr]">
-        <SectionCard title="Stato automazione" description="Configurazione effettiva usata dai cron e dai trigger manuali.">
-          <div className="space-y-3 text-sm">
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3">
-              <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-[var(--primary)]" /><span>Invio automatico</span></div>
-              <span className={`rounded-full px-2 py-1 text-xs font-medium ${data.settings.autoSendEnabled ? "bg-green-500/10 text-green-300" : "bg-amber-500/10 text-amber-300"}`}>{data.settings.autoSendEnabled ? "Attivo" : "Disattivato"}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3"><span>Soglia auto-send</span><span className="font-medium">{data.settings.minScore}</span></div>
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3"><span>Cap giornaliero</span><span className="font-medium">{data.settings.maxEmailsPerDay}</span></div>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3"><p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">Mittente email</p><p className="mt-1 font-medium">{data.settings.emailFrom}</p></div>
+      {/* Campaigns + Cities */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="section-card">
+          <div className="flex items-center justify-between mb-4">
+            <p className="section-title mb-0"><Zap className="w-4 h-4 text-[var(--primary)]" /> Campagne</p>
+            <Link href="/campaigns" className="text-sm text-[var(--primary)] hover:underline">Tutte</Link>
           </div>
-        </SectionCard>
-
-        <SectionCard title="Focus tecnico" description="Dove intervenire per aumentare automazione e resa.">
-          <div className="space-y-3 text-sm text-[var(--muted-foreground)]">
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3"><p className="font-medium text-[var(--foreground)]">Lead da analizzare</p><p className="mt-1">{data.metrics.pendingAnalysisCount} lead ancora senza analisi.</p></div>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3"><p className="font-medium text-[var(--foreground)]">Invii falliti</p><p className="mt-1">{data.metrics.failedEmailCount} messaggi email con stato failed da recuperare.</p></div>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3"><p className="font-medium text-[var(--foreground)]">Coda manuale</p><p className="mt-1">{data.metrics.outreachCount} lead aspettano revisione o contatto WhatsApp.</p></div>
+          <div className="space-y-2">
+            {d.campaigns.map((c) => (
+              <div key={c.id} className="flex items-center justify-between rounded-lg bg-[var(--muted)] px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">{c.name}</p>
+                  <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{[c.sector, c.city || c.region].filter(Boolean).join(" · ")}</p>
+                </div>
+                <div className="flex items-center gap-3 text-xs shrink-0">
+                  <span className="text-[var(--muted-foreground)]">{c._count.leads} lead</span>
+                  <span className={`badge ${c.status === "active" ? "badge-green" : c.status === "completed" ? "badge-gray" : "badge-yellow"}`}>{c.status}</span>
+                </div>
+              </div>
+            ))}
+            {d.campaigns.length === 0 && <p className="text-[var(--muted-foreground)] text-sm">Nessuna campagna</p>}
           </div>
-        </SectionCard>
+        </div>
 
-        <SectionCard title="Percorso consigliato" description="Uso quotidiano della piattaforma senza dispersione.">
-          <ol className="space-y-3 text-sm text-[var(--muted-foreground)]">
-            <li className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3">1. Apri Settings per verificare soglie, cron e mittente email.</li>
-            <li className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3">2. Controlla questa dashboard per code, errori, hot leads e campagne.</li>
-            <li className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/35 px-4 py-3">3. Se serve, lancia un job manuale e verifica gli esiti nei Log.</li>
-          </ol>
-        </SectionCard>
-      </section>
+        <div className="section-card">
+          <p className="section-title"><MapPin className="w-4 h-4 text-emerald-400" /> Ultime città lavorate</p>
+          <div className="space-y-2">
+            {d.cityLogs.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between rounded-lg bg-[var(--muted)] px-3 py-2.5 text-sm">
+                <div>
+                  <p className="font-medium">{entry.city}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">{[entry.sector, entry.region].filter(Boolean).join(" · ")}</p>
+                </div>
+                <div className="text-right text-xs text-[var(--muted-foreground)]">
+                  <p>{entry.leadsFound} lead</p>
+                  <p>{timeAgo(entry.scrapedAt)}</p>
+                </div>
+              </div>
+            ))}
+            {d.cityLogs.length === 0 && <p className="text-[var(--muted-foreground)] text-sm">Nessuna città registrata</p>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

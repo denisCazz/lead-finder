@@ -136,7 +136,7 @@ export default function LeadDetailPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">{lead.companyName}</h1>
+          <h1 className="page-title !mb-0">{lead.companyName}</h1>
           <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-sm text-[var(--muted-foreground)]">
             {lead.sector && <span className="bg-[var(--muted)] px-2 py-0.5 rounded">{lead.sector}</span>}
             {lead.city && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {lead.city}</span>}
@@ -147,7 +147,7 @@ export default function LeadDetailPage() {
           <button
             onClick={handleAnalyze}
             disabled={analyzing}
-            className="flex-1 sm:flex-none px-4 py-2 bg-yellow-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2"
+            className="btn btn-outline flex-1 sm:flex-none"
           >
             <BarChart3 className="w-4 h-4" />
             {analyzing ? "Analisi..." : "Analizza"}
@@ -155,7 +155,7 @@ export default function LeadDetailPage() {
           <button
             onClick={handleGenerate}
             disabled={generating}
-            className="flex-1 sm:flex-none px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2"
+            className="btn btn-primary flex-1 sm:flex-none"
           >
             <Sparkles className="w-4 h-4" />
             {generating ? "Generazione..." : "Genera Messaggio"}
@@ -165,9 +165,9 @@ export default function LeadDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Contact Info */}
-        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6 flex flex-col justify-between">
+        <div className="section-card flex flex-col justify-between">
           <div>
-            <h2 className="text-lg font-semibold mb-4">Contatti</h2>
+            <h2 className="section-title">Contatti</h2>
             <div className="space-y-3 text-sm">
               {lead.contactName && (
                 <div><span className="text-[var(--muted-foreground)] mr-1">Referente:</span> <span className="break-words">{lead.contactName}</span></div>
@@ -206,8 +206,8 @@ export default function LeadDetailPage() {
         </div>
 
         {/* Analysis */}
-        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
-          <h2 className="text-lg font-semibold mb-4">Analisi</h2>
+        <div className="section-card">
+          <h2 className="section-title">Analisi</h2>
           {!latestAnalysis ? (
             <p className="text-sm text-[var(--muted-foreground)]">Non ancora analizzato</p>
           ) : (
@@ -263,16 +263,16 @@ export default function LeadDetailPage() {
         </div>
 
         {/* Status */}
-        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
-          <h2 className="text-lg font-semibold mb-4">Stato</h2>
+        <div className="section-card">
+          <h2 className="section-title">Stato</h2>
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-[var(--muted-foreground)]">Stato attuale</span>
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                lead.status === "new" ? "bg-blue-500/20 text-blue-400" :
-                lead.status === "analyzed" ? "bg-yellow-500/20 text-yellow-400" :
-                lead.status === "contacted" ? "bg-green-500/20 text-green-400" :
-                "bg-gray-500/20 text-gray-400"
+              <span className={`badge ${
+                lead.status === "new" ? "badge-blue" :
+                lead.status === "analyzed" ? "badge-yellow" :
+                lead.status === "contacted" ? "badge-green" :
+                "badge-gray"
               }`}>
                 {lead.status}
               </span>
@@ -400,20 +400,20 @@ export default function LeadDetailPage() {
       <div className="mt-8">
         <h2 className="text-lg font-semibold mb-4">Messaggi ({lead.messages.length})</h2>
         {lead.messages.length === 0 ? (
-          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-8 text-center text-[var(--muted-foreground)]">
+          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-8 text-center text-[var(--muted-foreground)] empty-state">
             Nessun messaggio generato. Clicca &ldquo;Genera Messaggio&rdquo; per crearne uno.
           </div>
         ) : (
           <div className="space-y-4">
             {lead.messages.map((msg) => (
-              <div key={msg.id} className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+              <div key={msg.id} className="section-card">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      msg.status === "draft" ? "bg-gray-500/20 text-gray-400" :
-                      msg.status === "approved" ? "bg-blue-500/20 text-blue-400" :
-                      msg.status === "sent" ? "bg-green-500/20 text-green-400" :
-                      "bg-red-500/20 text-red-400"
+                    <span className={`badge ${
+                      msg.status === "draft" ? "badge-gray" :
+                      msg.status === "approved" ? "badge-blue" :
+                      msg.status === "sent" ? "badge-green" :
+                      "badge-red"
                     }`}>
                       {msg.status}
                     </span>
@@ -433,7 +433,7 @@ export default function LeadDetailPage() {
                     {msg.status === "draft" && (
                       <button
                         onClick={() => handleApprove(msg.id)}
-                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:opacity-90"
+                        className="btn btn-primary btn-sm"
                       >
                         Approva
                       </button>
@@ -441,7 +441,7 @@ export default function LeadDetailPage() {
                     {(msg.status === "approved" || msg.status === "draft") && lead.email && (
                       <button
                         onClick={() => handleSendEmail(msg.id)}
-                        className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:opacity-90 flex items-center gap-1"
+                        className="btn btn-success btn-sm"
                       >
                         <Send className="w-3 h-3" /> Invia Email
                       </button>
