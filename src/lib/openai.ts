@@ -252,46 +252,95 @@ export function mapIssuesToProblemString(issues: {
   isMobileFriendly?: boolean;
   hasModernDesign?: boolean;
   hasCrm?: boolean;
+  sector?: string | null;
+  aiDiagnosis?: SiteDiagnosis | null;
 }): { problem: string; service: string } {
+  const sector = (issues.sector || "").toLowerCase();
+
+  // If we have an AI diagnosis, use its insights as primary source
+  if (issues.aiDiagnosis) {
+    const diag = issues.aiDiagnosis;
+    // Use the AI's identified weaknesses and suggested approach
+    if (diag.weaknesses.length > 0 && diag.suggestedApproach) {
+      return {
+        problem: diag.weaknesses[0],
+        service: diag.suggestedApproach,
+      };
+    }
+  }
+
+  // Collect all detected issues, then pick the most impactful one for this sector
+  const problems: { problem: string; service: string; weight: number }[] = [];
+
   if (issues.performanceScore !== null && issues.performanceScore !== undefined && issues.performanceScore < 50) {
-    return {
-      problem: `Il sito ci mette troppo a caricare (performance score: ${issues.performanceScore}/100)`,
-      service: "Rifacimento Sito Web ad alte performance",
-    };
+    problems.push({
+      problem: `Il sito è molto lento (performance ${issues.performanceScore}/100) — i clienti lo abbandonano prima di vederlo`,
+      service: "Ottimizzazione e rifacimento sito web performante",
+      weight: 90,
+    });
   }
-  if (!issues.hasEcommerce) {
-    return {
-      problem: "Non hanno un e-commerce o un sistema per vendere online",
-      service: "E-commerce custom",
-    };
-  }
-  if (!issues.hasBooking) {
-    return {
-      problem: "Non hanno un sistema per prenotare online",
-      service: "Sistema di prenotazione online",
-    };
-  }
+
   if (!issues.isMobileFriendly) {
-    return {
-      problem: "Il sito non è ottimizzato per mobile",
-      service: "Rifacimento Sito Web responsive e performante",
-    };
+    problems.push({
+      problem: "Il sito non funziona bene da smartphone — oggi il 70% del traffico arriva da mobile",
+      service: "Sito web responsive ottimizzato per mobile",
+      weight: 85,
+    });
   }
+
   if (!issues.hasModernDesign) {
-    return {
-      problem: "Il sito ha un design datato che non trasmette professionalità",
-      service: "Rifacimento Sito Web moderno",
-    };
+    problems.push({
+      problem: "Il sito ha un design datato che non trasmette professionalità ai potenziali clienti",
+      service: "Rifacimento sito web con design moderno e professionale",
+      weight: 70,
+    });
   }
+
+  // E-commerce: only suggest for sectors where selling online makes sense
+  const ecommerceSectors = ["negozio", "shop", "boutique", "abbigliamento", "scarpe", "gioiell",
+    "artigian", "alimentar", "vivaio", "ferramenta", "libreria", "ottica", "farmacia",
+    "erboristeria", "profumeria", "casalinghi", "elettronica", "biciclette", "sport"];
+  const sectorFitsEcommerce = ecommerceSectors.some((s) => sector.includes(s));
+  if (!issues.hasEcommerce && sectorFitsEcommerce) {
+    problems.push({
+      problem: "Non vendono ancora online — stanno perdendo clienti che comprano sul web",
+      service: "E-commerce per vendita online",
+      weight: 80,
+    });
+  }
+
+  // Booking: only for service/appointment-based businesses
+  const bookingSectors = ["ristorante", "pizzeria", "trattoria", "bar", "hotel", "b&b", "albergo",
+    "dentist", "medic", "fisioterapi", "estet", "parrucchi", "barbier", "spa", "palestra",
+    "centro benessere", "veterinar", "consulen", "studio", "avvocat", "commercialist",
+    "notai", "autofficina", "meccanico", "lavanderia"];
+  const sectorFitsBooking = bookingSectors.some((s) => sector.includes(s));
+  if (!issues.hasBooking && sectorFitsBooking) {
+    problems.push({
+      problem: "I clienti non possono prenotare online — devono chiamare e spesso rinunciano",
+      service: "Sistema di prenotazione online integrato nel sito",
+      weight: 75,
+    });
+  }
+
   if (!issues.hasCrm) {
-    return {
-      problem: "Gestiscono ancora clienti e lavori con fogli Excel o carta e penna",
-      service: "Gestionale/CRM su misura",
-    };
+    problems.push({
+      problem: "Gestiscono clienti e lavori manualmente — rischiano di perdere ordini e appuntamenti",
+      service: "Gestionale digitale su misura per organizzare clienti e lavoro",
+      weight: 50,
+    });
   }
+
+  // Sort by weight and return the most impactful issue
+  problems.sort((a, b) => b.weight - a.weight);
+
+  if (problems.length > 0) {
+    return { problem: problems[0].problem, service: problems[0].service };
+  }
+
   return {
-    problem: "Il sito ha margini di miglioramento significativi",
-    service: "Sito Web ad alte performance",
+    problem: "Il sito ha margini di miglioramento per attrarre più clienti online",
+    service: "Strategia digitale e ottimizzazione della presenza online",
   };
 }
 

@@ -258,6 +258,11 @@ export async function POST(request: NextRequest) {
     const pct = 85 + Math.round(((i + 1) / topLeads.length) * 12);
 
     try {
+      let aiDiag = null;
+      if (analysis.aiDiagnosis) {
+        try { aiDiag = JSON.parse(analysis.aiDiagnosis); } catch { /* ignore */ }
+      }
+
       const mapped = mapIssuesToProblemString({
         performanceScore: analysis.performanceScore,
         hasEcommerce: analysis.hasEcommerce,
@@ -265,12 +270,9 @@ export async function POST(request: NextRequest) {
         isMobileFriendly: analysis.isMobileFriendly,
         hasModernDesign: analysis.hasModernDesign,
         hasCrm: analysis.hasCrm,
+        sector: lead.sector,
+        aiDiagnosis: aiDiag,
       });
-
-      let aiDiag = null;
-      if (analysis.aiDiagnosis) {
-        try { aiDiag = JSON.parse(analysis.aiDiagnosis); } catch { /* ignore */ }
-      }
 
       const emailResult = await generateColdEmail({
         companyName: lead.companyName,

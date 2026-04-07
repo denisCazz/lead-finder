@@ -684,15 +684,6 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
         const leadEmail = await enrichLeadEmail(lead);
         await enrichLeadPhone(lead);
 
-        const { problem, service } = mapIssuesToProblemString({
-          performanceScore: analysis.performanceScore,
-          hasEcommerce: analysis.hasEcommerce,
-          hasBooking: analysis.hasBooking,
-          isMobileFriendly: analysis.isMobileFriendly,
-          hasModernDesign: analysis.hasModernDesign,
-          hasCrm: analysis.hasCrm,
-        });
-
         let aiDiag: SiteDiagnosis | null = null;
         if (analysis.aiDiagnosis) {
           try {
@@ -701,6 +692,17 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
             // ignore invalid JSON
           }
         }
+
+        const { problem, service } = mapIssuesToProblemString({
+          performanceScore: analysis.performanceScore,
+          hasEcommerce: analysis.hasEcommerce,
+          hasBooking: analysis.hasBooking,
+          isMobileFriendly: analysis.isMobileFriendly,
+          hasModernDesign: analysis.hasModernDesign,
+          hasCrm: analysis.hasCrm,
+          sector: lead.sector,
+          aiDiagnosis: aiDiag,
+        });
 
         let qualification: LeadQualification = {
           priority: lead.score >= 75 ? "alta" : lead.score >= 45 ? "media" : "bassa",
@@ -1215,15 +1217,6 @@ export async function runLeadBackfillWorker(): Promise<BackfillWorkerResult> {
             results.emailEnriched++;
           }
 
-          const { problem, service } = mapIssuesToProblemString({
-            performanceScore: analysis.performanceScore,
-            hasEcommerce: analysis.hasEcommerce,
-            hasBooking: analysis.hasBooking,
-            isMobileFriendly: analysis.isMobileFriendly,
-            hasModernDesign: analysis.hasModernDesign,
-            hasCrm: analysis.hasCrm,
-          });
-
           let aiDiag: SiteDiagnosis | null = null;
           if (analysis.aiDiagnosis) {
             try {
@@ -1232,6 +1225,17 @@ export async function runLeadBackfillWorker(): Promise<BackfillWorkerResult> {
               // ignore invalid JSON
             }
           }
+
+          const { problem, service } = mapIssuesToProblemString({
+            performanceScore: analysis.performanceScore,
+            hasEcommerce: analysis.hasEcommerce,
+            hasBooking: analysis.hasBooking,
+            isMobileFriendly: analysis.isMobileFriendly,
+            hasModernDesign: analysis.hasModernDesign,
+            hasCrm: analysis.hasCrm,
+            sector: lead.sector,
+            aiDiagnosis: aiDiag,
+          });
 
           let qualification: LeadQualification = {
             priority: lead.score >= 75 ? "alta" : lead.score >= 45 ? "media" : "bassa",

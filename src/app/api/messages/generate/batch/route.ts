@@ -23,6 +23,12 @@ export async function POST() {
       let problem: string;
       let service: string;
 
+      // Parse AI diagnosis if available
+      let aiDiag: SiteDiagnosis | null = null;
+      if (analysis?.aiDiagnosis) {
+        try { aiDiag = JSON.parse(analysis.aiDiagnosis); } catch { /* ignore */ }
+      }
+
       if (analysis) {
         const mapped = mapIssuesToProblemString({
           performanceScore: analysis.performanceScore,
@@ -31,18 +37,14 @@ export async function POST() {
           isMobileFriendly: analysis.isMobileFriendly,
           hasModernDesign: analysis.hasModernDesign,
           hasCrm: analysis.hasCrm,
+          sector: lead.sector,
+          aiDiagnosis: aiDiag,
         });
         problem = mapped.problem;
         service = analysis.suggestedService || mapped.service;
       } else {
         problem = "Il sito ha margini di miglioramento significativi";
-        service = "Sito Web ad alte performance";
-      }
-
-      // Parse AI diagnosis if available
-      let aiDiag: SiteDiagnosis | null = null;
-      if (analysis?.aiDiagnosis) {
-        try { aiDiag = JSON.parse(analysis.aiDiagnosis); } catch { /* ignore */ }
+        service = "Strategia digitale e ottimizzazione della presenza online";
       }
 
       const emailResult = await generateColdEmail({
