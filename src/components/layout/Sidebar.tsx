@@ -22,6 +22,7 @@ import {
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/ai-campaign", label: "AI Campaign", icon: Bot },
+  { href: "/campaigns", label: "Campagne", icon: Zap },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/hot-leads", label: "Hot Leads", icon: Flame },
   { href: "/messages", label: "Messaggi", icon: MessageSquare },
