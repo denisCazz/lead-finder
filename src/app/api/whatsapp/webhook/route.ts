@@ -35,33 +35,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  try {
-    for (const entry of body.entry || []) {
-      for (const change of entry.changes || []) {
-        const value = change.value;
-        if (!value) continue;
+  // Process in background — Meta requires a fast 200 response (< 20s)
+  // otherwise it disables the webhook subscription.
+  processWebhook(body).catch((err) =>
+    console.error("[WhatsApp Webhook] Background processing error:", err)
+  );
 
-        // ── Incoming messages ──
-        if (value.messages) {
-          for (const msg of value.messages) {
-            await handleIncomingMessage(msg, value.contacts?.[0]);
-          }
+  return NextResponse.json({ ok: true });
+}
+
+async function processWebhook(body: Record<string, unknown>) {
+  for (const entry of (body.entry as Array<Record<string, unknown>>) || []) {
+    for (const change of (entry.changes as Array<Record<string, unknown>>) || []) {
+      const value = change.value as Record<string, unknown> | undefined;
+      if (!value) continue;
+
+      // ── Incoming messages ──
+      if (value.messages) {
+        for (const msg of value.messages as Array<Record<string, unknown>>) {
+          await handleIncomingMessage(
+            msg as Parameters<typeof handleIncomingMessage>[0],
+            ((value.contacts as Array<Record<string, unknown>>)?.[0]) as Parameters<typeof handleIncomingMessage>[1]
+          );
         }
+      }
 
-        // ── Status updates (delivered, read, etc.) ──
-        if (value.statuses) {
-          for (const status of value.statuses) {
-            await handleStatusUpdate(status);
-          }
+      // ── Status updates (delivered, read, etc.) ──
+      if (value.statuses) {
+        for (const status of value.statuses as Array<Record<string, unknown>>) {
+          await handleStatusUpdate(status as Parameters<typeof handleStatusUpdate>[0]);
         }
       }
     }
-  } catch (error) {
-    console.error("[WhatsApp Webhook] Error processing webhook:", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true });
 }
 
 async function handleIncomingMessage(
