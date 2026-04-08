@@ -182,7 +182,7 @@ Confidence: ${input.diagnosis.confidence}`;
       const parsed = JSON.parse(cleaned) as Partial<LeadQualification>;
       const fallbackAction = parsed.priority === "scartare"
         ? "do_not_contact"
-        : parsed.suggestedChannel === "email"
+        : (parsed.suggestedChannel === "whatsapp" || parsed.suggestedChannel === "email")
           ? "send_now"
           : "review_manually";
 
@@ -190,7 +190,7 @@ Confidence: ${input.diagnosis.confidence}`;
         priority: parsed.priority || "media",
         reason: parsed.reason || "Lead da rivedere manualmente",
         bestTiming: parsed.bestTiming || "subito",
-        suggestedChannel: parsed.suggestedChannel || "email",
+        suggestedChannel: parsed.suggestedChannel || "whatsapp",
         recommendedAction: parsed.recommendedAction || fallbackAction,
       };
     },

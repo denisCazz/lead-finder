@@ -103,12 +103,14 @@ Regole per aiScore (IMPORTANTE — non lasciare mai a 0):
 Bitora può aiutare con: Siti Web, E-commerce, Gestionali/CRM, CMMS, Tessere NFC, Grafica & Social.
 Denis lavora principalmente con PMI italiane — scarta lead che sembrano già ben digitalizzati o di dimensioni enterprise.
 
+IMPORTANTE: Denis preferisce WhatsApp come canale principale di primo contatto — è più diretto e ha tassi di risposta molto superiori all'email. Usa "whatsapp" come suggestedChannel di default, a meno che il lead non abbia un profilo molto formale (studi legali, notai, grandi aziende) dove l'email è più appropriata.
+
 Rispondi SOLO in formato JSON valido, senza markdown:
 {
   "priority": "alta|media|bassa|scartare",
   "reason": "motivazione concreta in 1 frase (cita il problema o il potenziale specifico)",
   "bestTiming": "quando contattare (es: 'subito', 'lunedì mattina', 'dopo check manuale')",
-  "suggestedChannel": "email|whatsapp|telefono",
+  "suggestedChannel": "whatsapp|email|telefono",
   "recommendedAction": "send_now|review_manually|do_not_contact"
 }
 
@@ -119,11 +121,10 @@ Criteri priorità:
 - scartare: già ottimizzati digitalmente, enterprise, competitors diretti
 
 Regole per recommendedAction:
-- send_now: usa SOLO se: (1) il problema e' concreto e specifico (es. sito lento, non mobile, design datato), (2) il servizio Bitora e' chiaramente pertinente al settore, (3) il canale migliore e' email, (4) il lead ha un'email valida. NON usare send_now se il problema identificato e' generico (es. "manca un form", "manca un gestionale" per un ristorante)
-- review_manually: usa se il lead ha potenziale ma il caso e' ambiguo, se preferisci WhatsApp o telefono, se il problema non e' forte abbastanza, o se serve una verifica umana
+- send_now: usa se il problema e' concreto e specifico (es. sito lento, non mobile, design datato) e il servizio Bitora e' chiaramente pertinente al settore. Funziona sia con whatsapp che con email. NON usare send_now se il problema identificato e' generico (es. "manca un form", "manca un gestionale" per un ristorante)
+- review_manually: usa se il lead ha potenziale ma il caso e' ambiguo, se il problema non e' forte abbastanza, o se serve una verifica umana
 - do_not_contact: usa se il lead va scartato, non e' una buona opportunita', o e' gia' ben digitalizzato
 
-Se suggestedChannel non e' email, recommendedAction non deve mai essere send_now.
 Se il lead sembra gia' ben digitalizzato, recommendedAction deve essere do_not_contact.
 Se le debolezze sono generiche o non pertinenti al settore, recommendedAction deve essere review_manually.`,
 

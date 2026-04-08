@@ -710,7 +710,7 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
           priority: lead.score >= 75 ? "alta" : lead.score >= 45 ? "media" : "bassa",
           reason: "Decisione AI non disponibile; lead lasciato in revisione manuale",
           bestTiming: "dopo check manuale",
-          suggestedChannel: lead.email ? "email" : lead.phone ? "whatsapp" : "telefono",
+          suggestedChannel: lead.phone ? "whatsapp" : lead.email ? "email" : "telefono",
           recommendedAction: "review_manually",
         };
 
@@ -795,17 +795,18 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
           // optional channel
         }
 
-        const messageType = leadEmail || lead.email ? "email" : lead.phone ? "whatsapp" : "email";
+        const messageType = lead.phone ? "whatsapp" : leadEmail || lead.email ? "email" : "whatsapp";
+        const readyForWhatsAppSend = Boolean(
+          lead.phone &&
+          whatsappText &&
+          qualification.recommendedAction === "send_now" &&
+          (qualification.suggestedChannel === "whatsapp" || !leadEmail && !lead.email)
+        );
         const readyForEmailSend = Boolean(
+          !readyForWhatsAppSend &&
           (leadEmail || lead.email) &&
           qualification.recommendedAction === "send_now" &&
           qualification.suggestedChannel === "email"
-        );
-        const readyForWhatsAppSend = Boolean(
-          !readyForEmailSend &&
-          messageType === "whatsapp" &&
-          lead.phone &&
-          qualification.recommendedAction === "send_now"
         );
 
         const message = await prisma.message.create({
@@ -824,15 +825,18 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
             leadId: lead.id,
             campaignId: lead.campaignId,
             type: "ai_generate",
-            message: readyForEmailSend
-              ? `✉️ Testi generati e approvati per invio: ${lead.companyName}`
-              : `✉️ Testi generati per revisione manuale: ${lead.companyName}`,
+            message: readyForWhatsAppSend
+              ? `📱 Testi generati e approvati per WhatsApp: ${lead.companyName}`
+              : readyForEmailSend
+                ? `✉️ Testi generati e approvati per invio email: ${lead.companyName}`
+                : `✉️ Testi generati per revisione manuale: ${lead.companyName}`,
             metadata: JSON.stringify({
               messageId: message.id,
               tokensUsed: emailResult.tokensUsed,
               recommendedAction: qualification.recommendedAction,
               suggestedChannel: qualification.suggestedChannel,
               readyForEmailSend,
+              readyForWhatsAppSend,
               reason: qualification.reason,
             }),
           },
@@ -912,20 +916,6 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
 
   const remaining = sendAll ? undefined : maxPerDay - sentToday;
 
-  const candidates = await prisma.message.findMany({
-    where: {
-      status: "approved",
-      type: "email",
-      lead: {
-        email: { not: null },
-        status: { not: "rejected" },
-      },
-    },
-    include: { lead: true },
-    ...(typeof remaining === "number" ? { take: remaining } : {}),
-    orderBy: { createdAt: "asc" },
-  });
-
   const stats: MorningWorkerResult = {
     sent: 0,
     failed: 0,
@@ -933,57 +923,11 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
     cap: maxPerDay,
     sentTodayBefore: sentToday,
     sendAll,
-    processed: candidates.length,
+    processed: 0,
   };
 
-  for (const message of candidates) {
-    if (!message.lead.email) continue;
-
-    const result = await sendEmail({
-      to: message.lead.email,
-      subject: message.subject || "Una proposta per voi",
-      body: message.content,
-      from: emailFrom,
-    });
-
-    if (result.success) {
-      await prisma.message.update({
-        where: { id: message.id },
-        data: { status: "sent", sentAt: new Date() },
-      });
-      await prisma.lead.update({
-        where: { id: message.lead.id },
-        data: { status: "contacted", dealStage: "contacted", lastContactedAt: new Date() },
-      });
-      await prisma.activityLog.create({
-        data: {
-          leadId: message.lead.id,
-          campaignId: message.lead.campaignId,
-          type: "send",
-          message: `📧 Invio mail completato: ${message.lead.companyName} <${message.lead.email}>`,
-          metadata: JSON.stringify({ messageId: message.id, score: message.lead.score }),
-        },
-      });
-      stats.sent++;
-    } else {
-      await prisma.message.update({
-        where: { id: message.id },
-        data: { status: "failed" },
-      });
-      await prisma.activityLog.create({
-        data: {
-          leadId: message.lead.id,
-          type: "send",
-          message: `❌ Invio mail fallito per ${message.lead.companyName}: ${result.error}`,
-        },
-      });
-      stats.failed++;
-      stats.errors.push(`${message.lead.companyName}: ${result.error}`);
-    }
-  }
-
-  // ── WhatsApp send pass ──
-  // Send approved WhatsApp messages (via Cloud API or Telegram fallback)
+  // ── WhatsApp send pass (PRIORITY) ──
+  // WhatsApp first: higher response rates, preferred channel
   // Rate limit: respect max_whatsapp_per_day setting (default 50, Meta limit 250)
   const todayStartWa = new Date();
   todayStartWa.setHours(0, 0, 0, 0);
@@ -1010,6 +954,8 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
       ...(typeof waRemaining === "number" ? { take: waRemaining } : {}),
       orderBy: { createdAt: "asc" },
     });
+
+    stats.processed += waCandidates.length;
 
     for (const message of waCandidates) {
       if (!message.lead.phone) continue;
@@ -1075,6 +1021,72 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
       } catch {
         stats.failed++;
         stats.errors.push(`${message.lead.companyName}: Telegram fallback failed`);
+      }
+    }
+  }
+
+  // ── Email send pass (secondary channel) ──
+  const emailRemaining = sendAll ? undefined : Math.max(0, (remaining ?? maxPerDay) - stats.sent);
+  if (emailRemaining === undefined || emailRemaining > 0) {
+    const emailCandidates = await prisma.message.findMany({
+      where: {
+        status: "approved",
+        type: "email",
+        lead: {
+          email: { not: null },
+          status: { not: "rejected" },
+        },
+      },
+      include: { lead: true },
+      ...(typeof emailRemaining === "number" ? { take: emailRemaining } : {}),
+      orderBy: { createdAt: "asc" },
+    });
+
+    stats.processed += emailCandidates.length;
+
+    for (const message of emailCandidates) {
+      if (!message.lead.email) continue;
+
+      const result = await sendEmail({
+        to: message.lead.email,
+        subject: message.subject || "Una proposta per voi",
+        body: message.content,
+        from: emailFrom,
+      });
+
+      if (result.success) {
+        await prisma.message.update({
+          where: { id: message.id },
+          data: { status: "sent", sentAt: new Date() },
+        });
+        await prisma.lead.update({
+          where: { id: message.lead.id },
+          data: { status: "contacted", dealStage: "contacted", lastContactedAt: new Date() },
+        });
+        await prisma.activityLog.create({
+          data: {
+            leadId: message.lead.id,
+            campaignId: message.lead.campaignId,
+            type: "send",
+            message: `📧 Invio mail completato: ${message.lead.companyName} <${message.lead.email}>`,
+            metadata: JSON.stringify({ messageId: message.id, score: message.lead.score }),
+          },
+        });
+        stats.sent++;
+      } else {
+        await prisma.message.update({
+          where: { id: message.id },
+          data: { status: "failed" },
+        });
+        await prisma.activityLog.create({
+          data: {
+            leadId: message.lead.id,
+            type: "send",
+            message: `❌ Invio mail fallito per ${message.lead.companyName}: ${result.error}`,
+          },
+        });
+        stats.failed++;
+        stats.errors.push(`${message.lead.companyName}: ${result.error}`);
       }
     }
   }
