@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       ]);
       const psResult = pagespeed.status === "fulfilled" ? pagespeed.value : null;
       const htmlResult = htmlAnalysis.status === "fulfilled" ? htmlAnalysis.value : null;
-      const { score, issues, suggestedService } = calculateScore(psResult, htmlResult);
+      const { score, issues, suggestedService } = calculateScore(psResult, htmlResult, lead.sector);
 
       // AI Diagnosis
       let aiDiagnosisJson: string | null = null;

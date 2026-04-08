@@ -30,7 +30,7 @@ export async function POST(
   const htmlResult = htmlAnalysis.status === "fulfilled" ? htmlAnalysis.value : null;
 
   // Calculate score
-  const { score, issues, suggestedService } = calculateScore(psResult, htmlResult);
+  const { score, issues, suggestedService } = calculateScore(psResult, htmlResult, lead.sector);
 
   // AI Diagnosis
   let aiDiagnosisJson: string | null = null;

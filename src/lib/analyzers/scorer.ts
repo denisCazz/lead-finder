@@ -9,7 +9,8 @@ export interface ScoreResult {
 
 export function calculateScore(
   pagespeed: PageSpeedResult | null,
-  htmlAnalysis: HtmlAnalysisResult | null
+  htmlAnalysis: HtmlAnalysisResult | null,
+  sector?: string | null
 ): ScoreResult {
   let score = 0;
   const issues: string[] = [];
@@ -45,34 +46,20 @@ export function calculateScore(
     issues.push("Sito non ottimizzato per mobile (mancanza viewport)");
   }
 
-  // ── E-commerce (0–15 pts) ────────────────────────────────────────────────
-  if (htmlAnalysis && !htmlAnalysis.hasEcommerce) {
-    score += 15;
-    issues.push("Nessun e-commerce rilevato");
-  }
-
-  // ── Booking (0–12 pts) ───────────────────────────────────────────────────
-  if (htmlAnalysis && !htmlAnalysis.hasBooking) {
-    score += 12;
-    issues.push("Nessun sistema di prenotazione online");
-  }
-
-  // ── Modern design (0–10 pts) ─────────────────────────────────────────────
+  // ── Modern design (0–15 pts) ──────────────────────────────────────────────
   if (htmlAnalysis && !htmlAnalysis.hasModernDesign) {
-    score += 10;
+    score += 15;
     issues.push("Tecnologie obsolete rilevate (Bootstrap 2/3, jQuery vecchio)");
-  }
-
-  // ── CRM (0–5 pts) ────────────────────────────────────────────────────────
-  if (htmlAnalysis && !htmlAnalysis.hasCrm) {
-    score += 5;
-    issues.push("Nessuna area clienti / gestionale rilevato");
   }
 
   // ── Analytics bonus (lowers score: they already have some digital maturity) ──
   if (htmlAnalysis?.hasAnalytics) {
     score = Math.max(0, score - 5);
   }
+
+  // NOTE: E-commerce, Booking, CRM are NOT scored here.
+  // These are context-dependent and evaluated by the AI diagnosis,
+  // which understands what the business actually does.
 
   // Cap at 100
   score = Math.min(score, 100);
@@ -87,6 +74,8 @@ function determineSuggestedService(
   htmlAnalysis: HtmlAnalysisResult | null,
   issues: string[]
 ): string {
+  // Only suggest universally-relevant services from technical analysis.
+  // Context-dependent services (e-commerce, booking, CRM) are decided by AI.
   if (pagespeed && pagespeed.performanceScore < 50) {
     return "Rifacimento Sito Web ad alte performance";
   }
@@ -96,17 +85,8 @@ function determineSuggestedService(
   if (htmlAnalysis && !htmlAnalysis.hasModernDesign) {
     return "Rifacimento Sito Web moderno";
   }
-  if (htmlAnalysis && !htmlAnalysis.hasEcommerce) {
-    return "E-commerce custom";
-  }
-  if (htmlAnalysis && !htmlAnalysis.hasBooking) {
-    return "Sistema di prenotazione online";
-  }
-  if (htmlAnalysis && !htmlAnalysis.hasCrm) {
-    return "CRM / Gestionale su misura";
-  }
   if (issues.length > 0) {
     return "Sito Web ad alte performance";
   }
-  return "Consulenza digitale";
+  return "Ottimizzazione presenza digitale";
 }

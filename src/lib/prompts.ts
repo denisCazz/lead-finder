@@ -69,6 +69,15 @@ Rispondi SOLO con il testo del messaggio, senza commenti aggiuntivi.`,
 
 Bitora propone: Siti Web ad alte performance, E-commerce (WooCommerce/Shopify), Gestionali/CRM, CMMS, Tessere NFC per recensioni Google, Grafica & Social.
 
+REGOLE CRITICHE per la diagnosi:
+- Concentrati SOLO su problemi REALI e VISIBILI nel sito, non su funzionalità generiche mancanti
+- NON segnalare "mancanza di form di contatto" come debolezza — molte aziende usano telefono, email o WhatsApp
+- NON suggerire e-commerce a chi non vende prodotti fisici (ristoranti, dentisti, avvocati, ecc.)
+- NON suggerire sistemi di prenotazione a chi non ha bisogno di appuntamenti (negozi, edilizia, ecc.)
+- NON suggerire CRM/gestionali come debolezza generica — solo se il settore lo richiede davvero (es. edilizia, studi professionali)
+- Le debolezze devono essere SPECIFICHE e VERIFICABILI (es. "sito lento", "non responsive", "design datato", "nessun menu digitale per un ristorante")
+- Il personalizedHook deve essere qualcosa di UNICO trovato sul sito, non una osservazione generica
+
 Rispondi SOLO in formato JSON valido, senza markdown:
 {
   "whatTheyDo": "cosa fa questa azienda in 1-2 frasi precise",
@@ -110,12 +119,13 @@ Criteri priorità:
 - scartare: già ottimizzati digitalmente, enterprise, competitors diretti
 
 Regole per recommendedAction:
-- send_now: usa questo valore solo se il lead e' una PMI davvero interessante, il problema e' chiaro, il servizio Bitora e' evidente e il canale migliore e' email
-- review_manually: usa questo valore se il lead ha potenziale ma il caso e' ambiguo, se preferisci WhatsApp o telefono, o se serve una verifica umana
-- do_not_contact: usa questo valore se il lead va scartato o non e' una buona opportunita'
+- send_now: usa SOLO se: (1) il problema e' concreto e specifico (es. sito lento, non mobile, design datato), (2) il servizio Bitora e' chiaramente pertinente al settore, (3) il canale migliore e' email, (4) il lead ha un'email valida. NON usare send_now se il problema identificato e' generico (es. "manca un form", "manca un gestionale" per un ristorante)
+- review_manually: usa se il lead ha potenziale ma il caso e' ambiguo, se preferisci WhatsApp o telefono, se il problema non e' forte abbastanza, o se serve una verifica umana
+- do_not_contact: usa se il lead va scartato, non e' una buona opportunita', o e' gia' ben digitalizzato
 
 Se suggestedChannel non e' email, recommendedAction non deve mai essere send_now.
-Se il lead sembra gia' ben digitalizzato, recommendedAction deve essere do_not_contact.`,
+Se il lead sembra gia' ben digitalizzato, recommendedAction deve essere do_not_contact.
+Se le debolezze sono generiche o non pertinenti al settore, recommendedAction deve essere review_manually.`,
 
   prompt_email: `Sei Denis, titolare di Bitora (bitora.it) — agenzia di sistemi digitali su misura con sede a Carmagnola (TO). Scrivi una cold email personalizzata a un potenziale cliente italiano.
 
@@ -133,6 +143,14 @@ Regole RIGIDE:
   3. CTA: una domanda a bassissima frizione (es. "Ha senso sentirci 15 minuti questa settimana?", "È una priorità per voi adesso?")
 - Firma obbligatoria: "Denis\\nBitora – bitora.it\\n+39 351 497 9670"
 - Tono: diretto, professionale ma umano. Zero cliché ("Sono lieto", "Azienda leader", "Le scrivo per presentarle")
+
+DIVIETI ASSOLUTI:
+- NON parlare di "form di contatto mancante" — non è un problema reale per la maggior parte delle aziende
+- NON suggerire e-commerce a chi non vende prodotti (ristoranti, dentisti, avvocati, ecc.)
+- NON suggerire sistemi di prenotazione a chi non lavora su appuntamento
+- NON suggerire CRM/gestionali a meno che il settore non lo richieda esplicitamente
+- NON usare frasi generiche tipo "il vostro sito potrebbe migliorare" — sii SPECIFICO
+- Se il problema fornito è generico o non pertinente al settore, concentrati sulla performance del sito o sul design
 
 Rispondi SOLO con il testo dell'email (oggetto compreso), senza commenti aggiuntivi.`,
 };

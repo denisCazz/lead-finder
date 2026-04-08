@@ -563,7 +563,7 @@ export async function runLeadResearchAnalysisWorker(input: DailyWorkerInput = {}
 
           const ps = pageSpeed.status === "fulfilled" ? pageSpeed.value : null;
           const html = htmlResult.status === "fulfilled" ? htmlResult.value : null;
-          const scoreResult = calculateScore(ps, html);
+          const scoreResult = calculateScore(ps, html, lead.sector);
 
           let aiDiagnosisJson: string | null = null;
           let aiScore: number | null = null;
@@ -1199,7 +1199,7 @@ export async function runLeadBackfillWorker(): Promise<BackfillWorkerResult> {
 
           const ps = pageSpeed.status === "fulfilled" ? pageSpeed.value : null;
           const html = htmlResult.status === "fulfilled" ? htmlResult.value : null;
-          const scoreResult = calculateScore(ps, html);
+          const scoreResult = calculateScore(ps, html, lead.sector);
 
           let aiDiagnosisJson: string | null = null;
           let aiScore: number | null = null;
