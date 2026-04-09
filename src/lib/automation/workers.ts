@@ -19,7 +19,7 @@ import { scrapeGoogleMaps } from "@/lib/scrapers/google-maps";
 import { scrapePagineGialle } from "@/lib/scrapers/pagine-gialle";
 import { notifyDailySummary, notifyLeadBatch, sendTelegramMessage, TelegramLeadSummary } from "@/lib/telegram";
 import { extractDomain } from "@/lib/utils";
-import { sendWhatsAppTemplate, sendWhatsAppText, isWhatsAppConfigured } from "@/lib/whatsapp";
+import { sendWhatsAppTemplate, sendWhatsAppText, isWhatsAppConfigured, logOutgoingToChat } from "@/lib/whatsapp";
 import * as cheerio from "cheerio";
 
 export type DailyWorkerInput = {
@@ -985,6 +985,9 @@ export async function runSendMailWorker(input: MorningWorkerInput = {}): Promise
               metadata: JSON.stringify({ messageId: message.id, waMessageId: waResult.messageId }),
             },
           });
+          // Log to WhatsApp chat history so it appears in the chat UI
+          const templateText = `Ciao ${message.lead.contactName || message.lead.companyName}, sono Denis di Bitora. Ho dato un'occhiata al vostro sito e credo di potervi aiutare con ${waContent.substring(0, 120)}. Posso mandarvi una breve analisi gratuita? Buona giornata!`;
+          await logOutgoingToChat(message.lead.phone!, templateText, waResult.messageId, message.lead.id).catch(() => {});
           stats.sent++;
           continue;
         }
@@ -1618,6 +1621,9 @@ export async function runFollowUpWorker(): Promise<FollowUpWorkerResult> {
         if (isWhatsAppConfigured()) {
           const waResult = await sendWhatsAppText(lead.phone, followUp.data.body);
           sent = waResult.success;
+          if (sent) {
+            await logOutgoingToChat(lead.phone!, followUp.data.body, waResult.messageId, lead.id).catch(() => {});
+          }
           if (!sent) results.errors.push(`Follow-up WA ${lead.companyName}: ${waResult.error}`);
         }
       }
